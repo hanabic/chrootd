@@ -1,0 +1,22 @@
+[
+    {
+        "id": "a01",
+        "path": "/usr/bin",
+        "level": "high"
+    },
+    {
+        "id": "a02",
+        "path": "/usr/bin",
+        "level": "high"
+    },
+    {
+        "id": "a03",
+        "path": "/usr/bin",
+        "level": "high"
+    },
+    {
+        "id": "a04",
+        "path": "/usr/bin",
+        "level": "high"
+    }
+]
