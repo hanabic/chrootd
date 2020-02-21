@@ -60,7 +60,6 @@ func (s *Server) ListConfig(id *pb.Id, stream pb.Api_ListConfigServer) error {
 	for _, config := range s.config {
 		fmt.Println(config)
 		if config.Id == id.Id {
-
 			if err := stream.Send(config); err != nil {
 				return err
 			}
@@ -91,7 +90,7 @@ func runServer(opt ServerOptions) *grpc.Server {
 	grpcServer := grpc.NewServer()
 	srv := &Server{}
 	srv.LoadConfig(opt.configPath)
-	pb.RegisterApiServer(grpcServer, srv)
+	//pb.RegisterApiServer(grpcServer, srv)
 	grpcServer.Serve(lis)
 	return grpcServer
 }

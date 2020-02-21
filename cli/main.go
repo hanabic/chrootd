@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/xhebox/chrootd/commands"
 	CommandHelp "github.com/xhebox/chrootd/commands/help"
+	CommandNew "github.com/xhebox/chrootd/commands/new"
 	"os"
 )
 
@@ -15,6 +16,7 @@ func main() {
 
 	commands := map[string]Command{
 		"help": CommandHelp.Help,
+		"new":  CommandNew.New,
 	}
 
 	if v, ok := commands[cmd]; ok {
