@@ -32,7 +32,7 @@ func termHandler(sig os.Signal) error {
 
 func main() {
 	var ConfGrpc GrpcConfig
-	ConfGrpc.Parse(fs)
+	ConfGrpc.SetFlag(fs)
 	err := fs.Parse(os.Args[1:])
 	if err != nil {
 		return
