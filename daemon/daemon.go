@@ -2,16 +2,20 @@ package main
 
 import (
 	"flag"
+	"github.com/sevlyar/go-daemon"
+	. "github.com/xhebox/chrootd/api/common"
 	"log"
 	"os"
 	"syscall"
 	"time"
-
-	"github.com/sevlyar/go-daemon"
 )
 
 var (
-	signal = flag.String("s", "", `
+	fs = flag.NewFlagSet("daemon", flag.ContinueOnError)
+)
+
+var (
+	signal = fs.String("s", "", `
 	stop — shutdown`)
 )
 
@@ -23,10 +27,17 @@ func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
 	log.Println("terminate")
 	return daemon.ErrStop
+
 }
 
 func main() {
-	flag.Parse()
+	var ConfGrpc GrpcConfig
+	ConfGrpc.Parse(fs)
+	err := fs.Parse(os.Args[1:])
+	if err != nil {
+		return
+	}
+
 	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
 
 	cntxt := &daemon.Context{
@@ -75,4 +86,6 @@ func main() {
 	if err != nil {
 		log.Printf("Error: %s", err.Error())
 	}
+
+	ConfGrpc.RunServer()
 }
