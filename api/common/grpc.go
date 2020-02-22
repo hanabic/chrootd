@@ -3,9 +3,9 @@ package common
 import (
 	"flag"
 	"fmt"
-	"google.golang.org/grpc"
-	"log"
 	"net"
+
+	"google.golang.org/grpc"
 )
 
 type GrpcConfig struct {
@@ -22,16 +22,16 @@ func (conf *GrpcConfig) Connect(opts ...grpc.DialOption) (*grpc.ClientConn, erro
 	return grpc.Dial(conf.Url, opts...)
 }
 
-func (conf *GrpcConfig) RunServer(opts ...grpc.ServerOption) *grpc.Server {
+func (conf *GrpcConfig) RunServer(opts ...grpc.ServerOption) error {
 	lis, err := net.Listen(conf.NetWorkType, conf.Url)
 	if err != nil {
-		log.Fatalf("grpc: failed to listen: %v", err)
+		return fmt.Errorf("grpc: failed to listen: %v", err)
 	}
+
 	grpcServer := grpc.NewServer(opts...)
-	err = grpcServer.Serve(lis)
-	if err != nil {
-		log.Fatalf("grpc: failed to serve: %v", err)
+	if err := grpcServer.Serve(lis); err != nil {
+		return fmt.Errorf("grpc: failed to serve: %v", err)
 	}
-	fmt.Println("grpc: server start")
-	return grpcServer
+
+	return nil
 }
