@@ -2,25 +2,19 @@ package main
 
 import (
 	"flag"
-	"github.com/sevlyar/go-daemon"
-	. "github.com/xhebox/chrootd/api/common"
 	"log"
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/sevlyar/go-daemon"
+	. "github.com/xhebox/chrootd/api/common"
+	"google.golang.org/grpc"
 )
 
 var (
-	fs = flag.NewFlagSet("daemon", flag.ContinueOnError)
-)
-
-var (
-	signal = fs.String("s", "", `
-	stop — shutdown`)
-)
-
-var (
-	stop = make(chan struct{})
+	signal *string
+	stop   = make(chan struct{})
 )
 
 func termHandler(sig os.Signal) error {
@@ -31,10 +25,14 @@ func termHandler(sig os.Signal) error {
 }
 
 func main() {
-	var ConfGrpc GrpcConfig
-	ConfGrpc.SetFlag(fs)
-	err := fs.Parse(os.Args[1:])
-	if err != nil {
+	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
+
+	signal = fs.String("s", "", `stop — shutdown`)
+
+	connConf := ConnConfig{}
+	connConf.SetFlag(fs)
+
+	if err := fs.Parse(os.Args[1:]); err != nil {
 		return
 	}
 
@@ -68,7 +66,21 @@ func main() {
 	}
 	defer cntxt.Release()
 
-	log.Print("daemon started")
+	log.Println("daemon started")
+
+	lis, err := connConf.Listen()
+	if err != nil {
+		log.Fatal("unable to listen: ", err)
+	}
+	defer lis.Close()
+
+	grpcServer := grpc.NewServer()
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Printf("grpc: failed to serve: %v\n", err)
+		}
+	}()
 
 	go func() {
 	loop:
@@ -76,6 +88,7 @@ func main() {
 			time.Sleep(time.Second)
 			select {
 			case <-stop:
+				grpcServer.GracefulStop()
 				break loop
 			default:
 			}
@@ -86,6 +99,4 @@ func main() {
 	if err != nil {
 		log.Printf("Error: %s", err.Error())
 	}
-
-	ConfGrpc.RunServer()
 }

@@ -1,11 +1,14 @@
 package new
 
 import (
+	"context"
 	"flag"
+	"log"
+	"net"
+
 	. "github.com/xhebox/chrootd/api/common"
 	. "github.com/xhebox/chrootd/commands"
 	"google.golang.org/grpc"
-	"log"
 )
 
 var New = Command{
@@ -14,16 +17,18 @@ var New = Command{
 	Hanlder: func(args []string) error {
 		fs := flag.NewFlagSet("new", flag.ContinueOnError)
 
-		grpcConf := GrpcConfig{}
-		grpcConf.SetFlag(fs)
+		connConf := ConnConfig{}
+		connConf.SetFlag(fs)
 
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
 
-		log.Printf("connecting to grpc server %s via %s\n", grpcConf.Url, grpcConf.NetWorkType)
+		log.Printf("connecting to grpc server %s via %s\n", connConf.Url, connConf.NetWorkType)
 
-		conn, err := grpcConf.Connect(grpc.WithInsecure())
+		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
+			return connConf.Dial()
+		}))
 		defer conn.Close()
 		return err
 	},
