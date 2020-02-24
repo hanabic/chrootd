@@ -5,4 +5,3 @@ type Command struct {
 	Desc    string
 	Hanlder func([]string) error
 }
-

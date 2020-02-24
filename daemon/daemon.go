@@ -29,22 +29,28 @@ func main() {
 
 	signal = fs.String("s", "", `stop — shutdown`)
 
-	connConf := DaemonConfig{}
-	connConf.GrpcConn.SetFlag(fs)
-	connConf.LoadEnv()
+	daemonConf := DaemonConfig{}
+	daemonConf.GrpcConn.SetFlag(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
+		return
+	}
+	daemonConf.LoadEnv()
+
+	if err := daemonConf.ParseIni(); err != nil {
+		log.Println(err)
+		stop <- struct{}{}
 		return
 	}
 
 	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
 
 	cntxt := &daemon.Context{
-		PidFileName: "chrootd.pid",
-		PidFilePerm: 0644,
-		LogFileName: "chrootd.log",
-		LogFilePerm: 0640,
-		WorkDir:     "./",
+		PidFileName: daemonConf.PidFileName,
+		PidFilePerm: daemonConf.PidFilePerm,
+		LogFileName: daemonConf.LogFileName,
+		LogFilePerm: daemonConf.LogFilePerm,
+		WorkDir:     daemonConf.WorkDir,
 		Umask:       027,
 		Args:        []string{"[go-daemon sample]"},
 	}
@@ -69,7 +75,7 @@ func main() {
 
 	log.Println("daemon started")
 
-	lis, err := connConf.Listen()
+	lis, err := daemonConf.GrpcConn.Listen()
 	if err != nil {
 		log.Fatal("unable to listen: ", err)
 	}
