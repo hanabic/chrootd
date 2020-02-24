@@ -19,12 +19,13 @@ var New = Command{
 
 		connConf := ConnConfig{}
 		connConf.SetFlag(fs)
+		connConf.LoadEnv()
 
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
 
-		log.Printf("connecting to grpc server %s via %s\n", connConf.Url, connConf.NetWorkType)
+		log.Printf("connecting to grpc server %s via %s\n", connConf.Addr, connConf.NetWorkType)
 
 		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
 			return connConf.Dial()

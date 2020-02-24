@@ -31,6 +31,7 @@ func main() {
 
 	connConf := ConnConfig{}
 	connConf.SetFlag(fs)
+	connConf.LoadEnv()
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return
