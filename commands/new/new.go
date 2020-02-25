@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 
-	. "github.com/xhebox/chrootd/api/common"
 	. "github.com/xhebox/chrootd/commands"
+	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
 

@@ -6,24 +6,28 @@ option java_outer_classname = "ContainerPool";
 
 package ContainerPool;
 
-service ContainerPool{
-    rpc CreateContainer(ContainerName) returns (Reply){}
-    rpc RunContainer(ContainerName) returns (Reply){}
-    rpc StopContainer(ContainerName) returns (Reply){}
-    rpc DeleteContainer(ContainerName) returns (Reply){}
-    rpc RenameContainer(NewName) returns (Reply){}
+service ContainerPool {
+    rpc FindContainer (Query) returns (Reply);
+    rpc SetContainer (SetRequest) returns (Reply);
 }
 
-message ContainerName {
+message Query {
     string name = 1;
-}
-
-message NewName {
-    string old = 1;
-    string new = 2;
+    bool isCreate = 2;
 }
 
 message Reply {
     string message = 1;
     int32 code = 2;
+}
+
+message SetRequest {
+    string id = 1;
+    oneof body {
+        DeleteContainer delete = 2;
+    }
+}
+
+message DeleteContainer {
+    bool op = 1;
 }
