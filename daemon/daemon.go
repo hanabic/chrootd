@@ -32,14 +32,12 @@ func main() {
 	daemonConf.GrpcConn.SetFlag(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		return
+		log.Fatalln(err)
 	}
 	daemonConf.LoadEnv()
 
 	if err := daemonConf.ParseIni(); err != nil {
-		log.Println(err)
-		stop <- struct{}{}
-		return
+		log.Fatalln(err)
 	}
 
 	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
@@ -57,7 +55,7 @@ func main() {
 	if len(daemon.ActiveFlags()) > 0 {
 		d, err := cntxt.Search()
 		if err != nil {
-			log.Fatalf("Unable send signal to the daemon: %s", err.Error())
+			log.Fatalf("Unable send signal to the daemon: %v\n", err)
 		}
 		daemon.SendCommands(d)
 		return
@@ -65,7 +63,7 @@ func main() {
 
 	d, err := cntxt.Reborn()
 	if err != nil {
-		log.Fatal("Unable to run: ", err)
+		log.Fatalf("Unable to run: %v\n", err)
 	}
 	if d != nil {
 		return
@@ -76,7 +74,7 @@ func main() {
 
 	lis, err := daemonConf.GrpcConn.Listen()
 	if err != nil {
-		log.Fatal("unable to listen: ", err)
+		log.Fatalf("unable to listen: %v\n", err)
 	}
 	defer lis.Close()
 
@@ -85,6 +83,7 @@ func main() {
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Printf("grpc: failed to serve: %v\n", err)
+			stop <- struct{}{}
 		}
 	}()
 
@@ -101,8 +100,7 @@ func main() {
 		}
 	}()
 
-	err = daemon.ServeSignals()
-	if err != nil {
-		log.Printf("Error: %s", err.Error())
+	if err = daemon.ServeSignals(); err != nil {
+		log.Printf("Fail to serve signals: %v\n", err)
 	}
 }
