@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_outer_classname = "ContainerPool";
+
+
+package ContainerPool;
+
+service ContainerPool{
+    rpc CreateContainer(ContainerName) returns (Reply){}
+    rpc RunContainer(ContainerName) returns (Reply){}
+    rpc StopContainer(ContainerName) returns (Reply){}
+    rpc DeleteContainer(ContainerName) returns (Reply){}
+    rpc RenameContainer(NewName) returns (Reply){}
+}
+
+message ContainerName {
+    string name = 1;
+}
+
+message NewName {
+    string old = 1;
+    string new = 2;
+}
+
+message Reply {
+    string message = 1;
+    int32 code = 2;
+}
