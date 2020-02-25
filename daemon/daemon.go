@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/sevlyar/go-daemon"
+	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
+	. "github.com/xhebox/chrootd/api/containerpool/server"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
@@ -79,7 +81,11 @@ func main() {
 	defer lis.Close()
 
 	grpcServer := grpc.NewServer()
+	pool := PoolServer{}
+	pool.ContainerGroup = make(map[string]string)
 
+	RegisterContainerPoolServer(grpcServer, &pool)
+	log.Println("listening in ", daemonConf.GrpcConn.Addr, " ", daemonConf.GrpcConn.NetWorkType)
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Printf("grpc: failed to serve: %v\n", err)

@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	. "github.com/xhebox/chrootd/commands"
+	CommandDelete "github.com/xhebox/chrootd/commands/delete"
+	CommandFind "github.com/xhebox/chrootd/commands/find"
 	CommandHelp "github.com/xhebox/chrootd/commands/help"
 	CommandNew "github.com/xhebox/chrootd/commands/new"
-	"os"
 )
 
 func main() {
@@ -15,8 +18,10 @@ func main() {
 	}
 
 	commands := map[string]Command{
-		"help": CommandHelp.Help,
-		"new":  CommandNew.New,
+		"help":   CommandHelp.Help,
+		"new":    CommandNew.New,
+		"find":   CommandFind.Find,
+		"delete": CommandDelete.Delete,
 	}
 
 	if v, ok := commands[cmd]; ok {
