@@ -32,10 +32,10 @@ func (conf *ConnConfig) LoadEnv() {
 	if value := os.Getenv("CHROOTD_CONNADDR"); value != "" {
 		conf.Addr = value
 	}
-	if value := os.Getenv("CHROOTD_TYPE"); value != "" {
+	if value := os.Getenv("CHROOTD_CONNTYPE"); value != "" {
 		conf.NetWorkType = value
 	}
-	if value := os.Getenv("CHROOTD_TIMEOUT"); value != "" {
+	if value := os.Getenv("CHROOTD_CONNTIMEOUT"); value != "" {
 		va, err := strconv.Atoi(value)
 		if err == nil {
 			conf.Timeout = time.Duration(va)

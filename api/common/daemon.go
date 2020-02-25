@@ -36,16 +36,17 @@ func (conf *DaemonConfig) SetFlag(fs *flag.FlagSet) {
 func (conf *DaemonConfig) LoadEnv() {
 	conf.GrpcConn.LoadEnv()
 
-	if value := os.Getenv("CHROOTD_DAEMON_CONFPATH"); value != "" {
+	if value := os.Getenv("CHROOTD_CONFIG"); value != "" {
 		conf.ConfPath = value
 	}
-	if value := os.Getenv("CHROOTD_DAEMON_PIDNAME"); value != "" {
+
+	if value := os.Getenv("CHROOTD_PIDFILE"); value != "" {
 		conf.PidFileName = value
 	}
-	if value := os.Getenv("CHROOTD_DAEMON_LOGNAME"); value != "" {
+
+	if value := os.Getenv("CHROOTD_LOGFILE"); value != "" {
 		conf.LogFileName = value
 	}
-
 }
 
 func (conf *DaemonConfig) ParseIni() error {
