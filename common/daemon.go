@@ -10,27 +10,29 @@ import (
 type DaemonConfig struct {
 	GrpcConn    ConnConfig
 	ConfPath    string
-	LogLevel    string
+	LogLevel    int
 	PidFileName string
 	PidFilePerm os.FileMode
 	LogFileName string
 	LogFilePerm os.FileMode
 	WorkDir     string
-	Chroot      string
+}
+
+func NewDaemonConfig() *DaemonConfig {
+	return &DaemonConfig{
+		ConfPath:    "/etc/chrootd/conf.ini",
+		LogLevel:    5,
+		PidFileName: "/run/chrootd.pid",
+		PidFilePerm: os.FileMode(0644),
+		LogFileName: "/var/log/chrootd.log",
+		LogFilePerm: os.FileMode(0640),
+		WorkDir:     "./",
+	}
 }
 
 func (conf *DaemonConfig) SetFlag(fs *flag.FlagSet) {
 	conf.GrpcConn.SetFlag(fs)
-
-	fs.StringVar(&conf.ConfPath, "p", "/etc/chrootd/conf.ini", `set path of daemon config`)
-
-	conf.LogLevel = "file"
-	conf.PidFileName = "/run/chrootd.pid"
-	conf.LogFilePerm = os.FileMode(0644)
-	conf.LogFileName = "/var/log/chrootd.log"
-	conf.LogFilePerm = os.FileMode(0640)
-	conf.WorkDir = "./"
-	conf.Chroot = "/"
+	fs.StringVar(&conf.ConfPath, "config", "/etc/chrootd/conf.ini", `set path of daemon config`)
 }
 
 func (conf *DaemonConfig) LoadEnv() {
@@ -57,9 +59,5 @@ func (conf *DaemonConfig) ParseIni() error {
 	if err := file.Section("DAEMON").MapTo(conf); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (conf *DaemonConfig) Check() error {
 	return nil
 }

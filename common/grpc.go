@@ -15,9 +15,9 @@ type ConnConfig struct {
 }
 
 func (conf *ConnConfig) SetFlag(fs *flag.FlagSet) {
-	fs.StringVar(&conf.Addr, "url", "127.0.0.1:9090", "host of grpc")
-	fs.StringVar(&conf.NetWorkType, "type", "tcp", "type of conn")
-	fs.DurationVar(&conf.Timeout, "timeout", 30*time.Second, "dial timeout")
+	fs.StringVar(&conf.Addr, "connaddr", "127.0.0.1:9090", "connection addr")
+	fs.StringVar(&conf.NetWorkType, "conntype", "tcp", "connection type")
+	fs.DurationVar(&conf.Timeout, "conntimeout", 30*time.Second, "connection dial timeout")
 }
 
 func (conf *ConnConfig) Dial() (net.Conn, error) {

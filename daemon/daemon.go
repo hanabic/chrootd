@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/sevlyar/go-daemon"
-	. "github.com/xhebox/chrootd/api/common"
+	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
 
@@ -21,7 +21,6 @@ func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
 	log.Println("terminate")
 	return daemon.ErrStop
-
 }
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 
 	signal = fs.String("s", "", `stop — shutdown`)
 
-	daemonConf := DaemonConfig{}
+	daemonConf := NewDaemonConfig()
 	daemonConf.GrpcConn.SetFlag(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
