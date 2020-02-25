@@ -34,13 +34,13 @@ func main() {
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalln(err)
 	}
+	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
+
 	daemonConf.LoadEnv()
 
 	if err := daemonConf.ParseIni(); err != nil {
 		log.Fatalln(err)
 	}
-
-	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
 
 	cntxt := &daemon.Context{
 		PidFileName: daemonConf.PidFileName,
