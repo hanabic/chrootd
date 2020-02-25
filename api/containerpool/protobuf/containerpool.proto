@@ -21,13 +21,18 @@ message Reply {
     int32 code = 2;
 }
 
+enum StateType {
+    Delete = 0;
+}
+
 message SetRequest {
-    string id = 1;
+
+    StateType state = 1;
     oneof body {
         DeleteContainer delete = 2;
     }
 }
 
 message DeleteContainer {
-    bool op = 1;
+    string id = 1;
 }
