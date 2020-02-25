@@ -1,5 +1,8 @@
 package utils
 
-func CheckPath(path string) {
+import "os"
 
+func PathExist(path string) bool {
+	_, e := os.Stat(path)
+	return !os.IsNotExist(e)
 }
