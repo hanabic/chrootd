@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	. "github.com/xhebox/chrootd/commands"
@@ -32,14 +32,14 @@ func main() {
 			}
 
 			if err := v.Hanlder(args); err != nil {
-				fmt.Printf("%+v\n", err)
+				log.Printf("%+v\n", err)
 				return
 			}
 		}
 	} else {
-		fmt.Printf("%s\n", os.Args[0])
+		log.Printf("%s\n", os.Args[0])
 		for _, v := range commands {
-			fmt.Printf("\t%s: %s\n", v.Name, v.Desc)
+			log.Printf("\t%s: %s\n", v.Name, v.Desc)
 		}
 	}
 }
