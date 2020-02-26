@@ -81,11 +81,11 @@ func main() {
 	defer lis.Close()
 
 	grpcServer := grpc.NewServer()
-	pool := PoolServer{}
-	pool.ContainerGroup = make(map[string]string)
-
-	RegisterContainerPoolServer(grpcServer, &pool)
 	log.Println("listening in ", daemonConf.GrpcConn.Addr, " ", daemonConf.GrpcConn.NetWorkType)
+
+	pool := NewPoolServer()
+	RegisterContainerPoolServer(grpcServer, pool)
+
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Printf("grpc: failed to serve: %v\n", err)

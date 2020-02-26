@@ -12,6 +12,12 @@ type PoolServer struct {
 	ContainerGroup map[string]string
 }
 
+func NewPoolServer() *PoolServer {
+	return &PoolServer{
+		ContainerGroup: make(map[string]string),
+	}
+}
+
 func (s *PoolServer) FindContainer(ctx context.Context, in *Query) (*Reply, error) {
 	for key, value := range s.ContainerGroup {
 		if value == in.Name {
