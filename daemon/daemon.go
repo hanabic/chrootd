@@ -31,7 +31,7 @@ func main() {
 	signal = fs.String("s", "", `stop — shutdown`)
 
 	daemonConf := NewDaemonConfig()
-	daemonConf.GrpcConn.SetFlag(fs)
+	daemonConf.SetFlag(fs)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalln(err)
