@@ -32,9 +32,9 @@ func NewDaemonConfig() *DaemonConfig {
 
 func (conf *DaemonConfig) SetFlag(fs *flag.FlagSet) {
 	conf.GrpcConn.SetFlag(fs)
-	fs.StringVar(&conf.ConfPath, "config", "/etc/chrootd/conf.ini", `set path of daemon config`)
-	fs.StringVar(&conf.PidFileName, "pid", "chrootd.pid", `set path of pidfile`)
-	fs.StringVar(&conf.LogFileName, "log", "chrootd.log", `set path of logfile`)
+	fs.StringVar(&conf.ConfPath, "config", "/etc/chrootd/conf.ini", "set path of daemon config")
+	fs.StringVar(&conf.PidFileName, "pid", "chrootd.pid", "set path of pidfile")
+	fs.StringVar(&conf.LogFileName, "log", "chrootd.log", "set path of logfile")
 }
 
 func (conf *DaemonConfig) LoadEnv() {
