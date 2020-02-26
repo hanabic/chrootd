@@ -1,6 +1,7 @@
 package find
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	. "github.com/xhebox/chrootd/api/containerpool/client"
@@ -9,6 +10,7 @@ import (
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 	"log"
+	"net"
 )
 
 var Find = Command{
@@ -26,7 +28,9 @@ var Find = Command{
 			return err
 		}
 
-		conn, err := grpc.Dial(connConf.Addr, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
+			return connConf.Dial()
+		}))
 		if err != nil {
 			return fmt.Errorf("did not connect: %v", err)
 		}

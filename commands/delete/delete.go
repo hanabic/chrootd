@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"flag"
 	. "github.com/xhebox/chrootd/api/containerpool/client"
 	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
@@ -8,6 +9,7 @@ import (
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 	"log"
+	"net"
 )
 
 var Delete = Command{
@@ -24,7 +26,9 @@ var Delete = Command{
 			return err
 		}
 
-		conn, err := grpc.Dial(connConf.Addr, grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
+			return connConf.Dial()
+		}))
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
 		}
