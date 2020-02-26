@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"log"
+
 	"github.com/segmentio/ksuid"
 	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
 )
@@ -19,6 +21,7 @@ func NewPoolServer() *PoolServer {
 }
 
 func (s *PoolServer) FindContainer(ctx context.Context, in *Query) (*Reply, error) {
+	log.Println("find container request")
 	for key, value := range s.ContainerGroup {
 		if value == in.Name {
 			return &Reply{Message: key, Code: 200}, nil
@@ -28,21 +31,25 @@ func (s *PoolServer) FindContainer(ctx context.Context, in *Query) (*Reply, erro
 	if in.IsCreate {
 		id := ksuid.New().String()
 		s.ContainerGroup[id] = in.Name
-		//TODO: create container ...
+		// TODO: create container ...
 		return &Reply{Message: id, Code: 200}, nil
 	}
+
 	return &Reply{Message: "not found", Code: 400}, nil
 }
 
 func (s *PoolServer) SetContainer(ctx context.Context, in *SetRequest) (*Reply, error) {
-	switch in.State {
-	case StateType_Delete:
+	log.Println("set container request")
+	switch body := in.Body.(type) {
+	case *SetRequest_Delete:
 		//TODO: delete container ...
-		if _, ok := s.ContainerGroup[in.GetDelete().Id]; !ok {
-			return &Reply{}, errors.New("container " + in.GetDelete().Id + " doesn't exits")
+		if _, ok := s.ContainerGroup[body.Delete.Id]; !ok {
+			return &Reply{}, fmt.Errorf("container %s does not exist", in.GetDelete().Id)
 		}
 
-		delete(s.ContainerGroup, in.GetDelete().Id)
+		delete(s.ContainerGroup, body.Delete.Id)
+		return &Reply{Message: "delete container " + in.GetDelete().Id + " successfully", Code: 200}, nil
+	default:
+		return &Reply{Message: "nothing", Code: 200}, nil
 	}
-	return &Reply{Message: "delete container " + in.GetDelete().Id + " successfully", Code: 200}, nil
 }
