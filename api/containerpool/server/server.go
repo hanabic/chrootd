@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/segmentio/ksuid"
@@ -44,11 +43,11 @@ func (s *PoolServer) SetContainer(ctx context.Context, in *SetRequest) (*Reply, 
 	case *SetRequest_Delete:
 		//TODO: delete container ...
 		if _, ok := s.ContainerGroup[body.Delete.Id]; !ok {
-			return &Reply{}, fmt.Errorf("container %s does not exist", in.GetDelete().Id)
+			return &Reply{Message: "container does not exist", Code: 400}, nil
 		}
 
 		delete(s.ContainerGroup, body.Delete.Id)
-		return &Reply{Message: "delete container " + in.GetDelete().Id + " successfully", Code: 200}, nil
+		return &Reply{Message: "delete container successfully", Code: 200}, nil
 	default:
 		return &Reply{Message: "nothing", Code: 200}, nil
 	}
