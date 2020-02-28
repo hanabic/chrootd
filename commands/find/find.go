@@ -43,8 +43,7 @@ var Find = Command{
 			return err
 		}
 
-		log.Println("name:", *name)
-		log.Println("id:", id)
+		log.Printf("name: %s\t%s", *name, id)
 		return nil
 	},
 }

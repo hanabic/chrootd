@@ -36,11 +36,14 @@ var Delete = Command{
 
 		client := NewContainerPoolClient(conn)
 
-		if err := DeleteContainerById(client, *id); err != nil {
-			return err
+		reply, err := DeleteContainerById(client, *id)
+
+		if err != nil {
+			log.Fatalf("failed to delete: %v", err)
 		}
 
-		log.Println("delete ", id, " successfully")
+		log.Printf("id:%v  %v", *id, reply)
+
 		return nil
 	},
 }

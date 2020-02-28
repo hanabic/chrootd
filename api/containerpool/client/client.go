@@ -22,19 +22,19 @@ func FindContainer(client ContainerPoolClient, name string, isCreate bool) (stri
 	return reply.Message, nil
 }
 
-func DeleteContainerById(client ContainerPoolClient, id string) error {
+func DeleteContainerById(client ContainerPoolClient, id string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.SetContainer(ctx, &SetRequest{
+	reply, err := client.SetContainer(ctx, &SetRequest{
 		State: StateType_Delete,
 		Body: &SetRequest_Delete{&DeleteContainer{
 			Id: id,
 		}},
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return reply.Message, nil
 }
