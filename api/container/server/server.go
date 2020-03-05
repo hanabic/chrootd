@@ -16,15 +16,12 @@ func NewContainerServer() *container {
 
 func (co *container) Handle(srv Container_HandleServer) error {
 	log.Println("into handle")
-	var cnt int32 = 0
+	cnt := int32(0)
 	for {
 		log.Println("wait fot recv")
 		data, err := srv.Recv()
 		if err != nil {
 			if err == io.EOF {
-				if err := srv.SendAndClose(&Reply{Seq: int32(cnt), Code: 0, Message: "success", Type: "id"}); err == nil {
-					return err
-				}
 				break
 			}
 			return err
@@ -41,5 +38,5 @@ func (co *container) Handle(srv Container_HandleServer) error {
 			log.Printf("get unknown packet: %v", d)
 		}
 	}
-	return nil
+	return srv.SendAndClose(&Reply{Seq: cnt, Code: 0, Message: "success", Type: "id"})
 }
