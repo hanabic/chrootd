@@ -37,12 +37,12 @@ var Find = Command{
 
 		client := NewContainerPoolClient(conn)
 
-		id, err := FindContainer(client, *name, *isCreate)
+		reply, err := FindContainer(client, *name, *isCreate)
 		if err != nil {
 			return err
 		}
 
-		log.Printf("name: %s\t%s", *name, id)
+		log.Printf("name: %s\t%s", *name, *reply)
 		return nil
 	},
 }

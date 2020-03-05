@@ -29,7 +29,8 @@ var Delete = Command{
 			return connConf.PoolDial()
 		}))
 		if err != nil {
-			log.Fatalf("did not connect: %v", err)
+			log.Printf("did not connect: %v", err)
+			return err
 		}
 		defer conn.Close()
 
@@ -38,10 +39,11 @@ var Delete = Command{
 		reply, err := DeleteContainerById(client, *id)
 
 		if err != nil {
-			log.Fatalf("failed to delete: %v", err)
+			log.Printf("failed to delete: %v", err)
+			return err
 		}
 
-		log.Printf("id:%v  %v", *id, reply)
+		log.Printf("id:%v  %v", *id, *reply)
 
 		return nil
 	},
