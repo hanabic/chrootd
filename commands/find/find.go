@@ -22,11 +22,10 @@ var Find = Command{
 		isCreate := fs.Bool("create", false, "whether to create")
 		connConf := ConnConfig{}
 		connConf.SetFlag(fs)
-		connConf.LoadEnv()
-
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
+		connConf.LoadEnv()
 
 		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
 			return connConf.PoolDial()

@@ -16,14 +16,12 @@ var New = Command{
 	Desc: "for test",
 	Hanlder: func(args []string) error {
 		fs := flag.NewFlagSet("new", flag.ContinueOnError)
-
 		connConf := ConnConfig{}
 		connConf.SetFlag(fs)
-		connConf.LoadEnv()
-
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
+		connConf.LoadEnv()
 
 		log.Printf("connecting to grpc server %s via %s\n", connConf.PoolAddr, connConf.NetWorkType)
 

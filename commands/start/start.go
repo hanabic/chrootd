@@ -20,11 +20,10 @@ var Container = Command{
 		fs := flag.NewFlagSet("start", flag.ContinueOnError)
 		connConf := ConnConfig{}
 		connConf.SetFlag(fs)
-		connConf.LoadEnv()
-
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
+		connConf.LoadEnv()
 
 		log.Printf("connecting to grpc server %s via %s\n", connConf.ContainerAddr, connConf.NetWorkType)
 
