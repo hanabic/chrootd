@@ -37,10 +37,6 @@ var Container = Command{
 		defer conn.Close()
 
 		client := pb.NewContainerClient(conn)
-		if err := StartContainer(client, args[0]); err != nil {
-			return nil
-
-		}
-		return err
+		return StartContainer(client, args[0])
 	},
 }
