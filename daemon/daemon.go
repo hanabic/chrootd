@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/sevlyar/go-daemon"
+	pb_c "github.com/xhebox/chrootd/api/container/protobuf"
+	. "github.com/xhebox/chrootd/api/container/server"
 	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
-	. "github.com/xhebox/chrootd/api/containerpool/server"
+	pb_p "github.com/xhebox/chrootd/api/containerpool/server"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
@@ -74,21 +76,38 @@ func main() {
 
 	log.Println("daemon started")
 
-	lis, err := daemonConf.GrpcConn.Listen()
+	// pool server
+	lis, err := daemonConf.GrpcConn.PoolListen()
 	if err != nil {
-		log.Fatalf("unable to listen: %v\n", err)
+		log.Fatalf("pool server is unable to listen: %v\n", err)
 	}
+	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.PoolAddr, daemonConf.GrpcConn.NetWorkType)
 	defer lis.Close()
+	poolGrpcServer := grpc.NewServer()
+	pool := pb_p.NewPoolServer()
+	RegisterContainerPoolServer(poolGrpcServer, pool)
 
-	grpcServer := grpc.NewServer()
-	log.Println("listening in ", daemonConf.GrpcConn.Addr, " ", daemonConf.GrpcConn.NetWorkType)
-
-	pool := NewPoolServer()
-	RegisterContainerPoolServer(grpcServer, pool)
+	// start server
+	clis, err := daemonConf.GrpcConn.ContainerListen()
+	if err != nil {
+		log.Fatalf("start server is unable to listen: %v\n", err)
+	}
+	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.ContainerAddr, daemonConf.GrpcConn.NetWorkType)
+	defer clis.Close()
+	containerGrpcServer := grpc.NewServer()
+	container := NewContainerServer()
+	pb_c.RegisterContainerServer(containerGrpcServer, container)
 
 	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("grpc: failed to serve: %v\n", err)
+		if err := containerGrpcServer.Serve(clis); err != nil {
+			log.Printf("grpc: container server failed to serve: %v\n", err)
+			stop <- struct{}{}
+		}
+	}()
+
+	go func() {
+		if err := poolGrpcServer.Serve(lis); err != nil {
+			log.Printf("grpc: pool server failed to serve: %v\n", err)
 			stop <- struct{}{}
 		}
 	}()
@@ -99,7 +118,8 @@ func main() {
 			time.Sleep(time.Second)
 			select {
 			case <-stop:
-				grpcServer.GracefulStop()
+				poolGrpcServer.GracefulStop()
+				containerGrpcServer.GracefulStop()
 				break loop
 			default:
 			}
