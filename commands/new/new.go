@@ -25,10 +25,10 @@ var New = Command{
 			return err
 		}
 
-		log.Printf("connecting to grpc server %s via %s\n", connConf.Addr, connConf.NetWorkType)
+		log.Printf("connecting to grpc server %s via %s\n", connConf.PoolAddr, connConf.NetWorkType)
 
 		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
-			return connConf.Dial()
+			return connConf.PoolDial()
 		}))
 		defer conn.Close()
 		return err

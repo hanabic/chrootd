@@ -27,7 +27,7 @@ var Delete = Command{
 		}
 
 		conn, err := grpc.Dial("new", grpc.WithInsecure(), grpc.WithBlock(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
-			return connConf.Dial()
+			return connConf.PoolDial()
 		}))
 		if err != nil {
 			log.Fatalf("did not connect: %v", err)
