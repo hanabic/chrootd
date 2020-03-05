@@ -16,32 +16,30 @@ func NewContainerServer() *container {
 
 func (co *container) Handle(srv Container_HandleServer) error {
 	log.Println("into handle")
-	cnt := 0
+	var cnt int32 = 0
 	for {
 		log.Println("wait fot recv")
 		data, err := srv.Recv()
-		if err == io.EOF {
-			return srv.SendMsg(&Reply{Message: "success", Code: 200})
-		}
 		if err != nil {
+			if err == io.EOF {
+				if err := srv.SendAndClose(&Reply{Seq: int32(cnt), Code: 0, Message: "success", Type: "id"}); err == nil {
+					return err
+				}
+				break
+			}
 			return err
 		}
+
 		switch d := data.Payload.(type) {
 		case *Packet_Id:
 			cnt++
-			log.Printf("open start %v", d.Id)
-
+			log.Printf("open container %v", d.Id)
 		case *Packet_Data:
 			cnt++
 			log.Printf("get data : %v", d.Data)
-
-		case *Packet_End:
-			cnt++
-			log.Printf("end")
-			if err := srv.SendAndClose(&Reply{Seq: int32(cnt), Code: 0, Message: "success", Type: "end"}); err == nil {
-				return err
-			}
-			return nil
+		default:
+			log.Printf("get unknown packet: %v", d)
 		}
 	}
+	return nil
 }
