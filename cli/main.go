@@ -9,6 +9,7 @@ import (
 	CommandFind "github.com/xhebox/chrootd/commands/find"
 	CommandHelp "github.com/xhebox/chrootd/commands/help"
 	CommandNew "github.com/xhebox/chrootd/commands/new"
+	CommandStart "github.com/xhebox/chrootd/commands/start"
 )
 
 func main() {
@@ -22,6 +23,7 @@ func main() {
 		"new":    CommandNew.New,
 		"find":   CommandFind.Find,
 		"delete": CommandDelete.Delete,
+		"start":  CommandStart.Container,
 	}
 
 	if v, ok := commands[cmd]; ok {
