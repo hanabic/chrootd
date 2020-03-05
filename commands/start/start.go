@@ -30,12 +30,16 @@ var Container = Command{
 		conn, err := grpc.Dial("start", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
 			return connConf.ContainerDial()
 		}))
+		if err != nil {
+			return err
+		}
 
 		defer conn.Close()
 
 		client := pb.NewContainerClient(conn)
 		if err := StartContainer(client, args[0]); err != nil {
-			return err
+			return nil
+
 		}
 		return err
 	},
