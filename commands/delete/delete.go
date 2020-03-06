@@ -3,13 +3,13 @@ package delete
 import (
 	"context"
 	"flag"
-	. "github.com/xhebox/chrootd/api/containerpool/client"
-	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
+	"github.com/xhebox/chrootd/api/containerpool"
 	. "github.com/xhebox/chrootd/commands"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"time"
 )
 
 var Delete = Command{
@@ -34,7 +34,7 @@ var Delete = Command{
 		}
 		defer conn.Close()
 
-		client := NewContainerPoolClient(conn)
+		client := containerpool.NewContainerPoolClient(conn)
 
 		reply, err := DeleteContainerById(client, *id)
 
@@ -47,4 +47,16 @@ var Delete = Command{
 
 		return nil
 	},
+}
+
+func DeleteContainerById(client containerpool.ContainerPoolClient, id string) (*containerpool.Reply, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return client.SetContainer(ctx, &containerpool.SetRequest{
+		State: containerpool.StateType_Delete,
+		Body: &containerpool.SetRequest_Delete{&containerpool.DeleteContainer{
+			Id: id,
+		}},
+	})
 }

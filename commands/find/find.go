@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	. "github.com/xhebox/chrootd/api/containerpool/client"
-	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
+	"github.com/xhebox/chrootd/api/containerpool"
 	. "github.com/xhebox/chrootd/commands"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"time"
 )
 
 var Find = Command{
@@ -35,7 +35,7 @@ var Find = Command{
 		}
 		defer conn.Close()
 
-		client := NewContainerPoolClient(conn)
+		client := containerpool.NewContainerPoolClient(conn)
 
 		reply, err := FindContainer(client, *name, *isCreate)
 		if err != nil {
@@ -45,4 +45,15 @@ var Find = Command{
 		log.Printf("name: %s\t%s", *name, *reply)
 		return nil
 	},
+}
+
+func FindContainer(client containerpool.ContainerPoolClient, name string, isCreate bool) (*containerpool.Reply, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	return client.FindContainer(ctx, &containerpool.Query{
+		Name:     name,
+		IsCreate: isCreate,
+	})
+
 }

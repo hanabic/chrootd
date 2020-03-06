@@ -2,16 +2,14 @@ package main
 
 import (
 	"flag"
+	"github.com/xhebox/chrootd/api/container"
+	"github.com/xhebox/chrootd/api/containerpool"
 	"log"
 	"os"
 	"syscall"
 	"time"
 
 	"github.com/sevlyar/go-daemon"
-	pb_c "github.com/xhebox/chrootd/api/container/protobuf"
-	. "github.com/xhebox/chrootd/api/container/server"
-	. "github.com/xhebox/chrootd/api/containerpool/protobuf"
-	pb_p "github.com/xhebox/chrootd/api/containerpool/server"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
@@ -84,8 +82,8 @@ func main() {
 	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.PoolAddr, daemonConf.GrpcConn.NetWorkType)
 	defer lis.Close()
 	poolGrpcServer := grpc.NewServer()
-	pool := pb_p.NewPoolServer()
-	RegisterContainerPoolServer(poolGrpcServer, pool)
+	pool := NewPoolServer()
+	containerpool.RegisterContainerPoolServer(poolGrpcServer, pool)
 
 	// start server
 	clis, err := daemonConf.GrpcConn.ContainerListen()
@@ -95,12 +93,12 @@ func main() {
 	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.ContainerAddr, daemonConf.GrpcConn.NetWorkType)
 	defer clis.Close()
 	containerGrpcServer := grpc.NewServer()
-	container := NewContainerServer()
-	pb_c.RegisterContainerServer(containerGrpcServer, container)
+	containers := NewContainerServer()
+	container.RegisterContainerServer(containerGrpcServer, containers)
 
 	go func() {
 		if err := containerGrpcServer.Serve(clis); err != nil {
-			log.Printf("grpc: container server failed to serve: %v\n", err)
+			log.Printf("grpc: ContainerServer server failed to serve: %v\n", err)
 			stop <- struct{}{}
 		}
 	}()
