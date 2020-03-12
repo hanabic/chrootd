@@ -12,8 +12,8 @@ service Container {
 message Packet {
     oneof payload {
         string id = 1;
-        string data = 2;
-        string end = 3;
+        string start = 2;
+        string stop =3;
     }
 }
 
