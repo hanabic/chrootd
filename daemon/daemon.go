@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/xhebox/chrootd/api/container"
-	"github.com/xhebox/chrootd/api/containerpool"
+	//"github.com/xhebox/chrootd/api/containerpool"
 	"log"
 	"os"
 	"syscall"
@@ -14,10 +14,14 @@ import (
 	"google.golang.org/grpc"
 )
 
+
+
+
 var (
 	signal *string
 	stop   = make(chan struct{})
 )
+
 
 func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
@@ -27,17 +31,17 @@ func termHandler(sig os.Signal) error {
 
 func main() {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
-
 	signal = fs.String("s", "", `stop — shutdown`)
 
 	daemonConf := NewDaemonConfig()
 	daemonConf.SetFlag(fs)
 
+	containerGroup := make(map[string]*SingleContainer)
+
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalln(err)
 	}
 	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
-
 	daemonConf.LoadEnv()
 
 	if err := daemonConf.ParseIni(); err != nil {
@@ -74,41 +78,35 @@ func main() {
 
 	log.Println("daemon started")
 
-	// pool server
-	lis, err := daemonConf.GrpcConn.PoolListen()
+	lis, err := daemonConf.GrpcConn.Listen()
 	if err != nil {
-		log.Fatalf("pool server is unable to listen: %v\n", err)
+		log.Fatalf("server is unable to listen: %v\n", err)
 	}
-	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.PoolAddr, daemonConf.GrpcConn.NetWorkType)
+	log.Printf("server listening in %v, %v", daemonConf.GrpcConn.Addr, daemonConf.GrpcConn.NetWorkType)
 	defer lis.Close()
-	poolGrpcServer := grpc.NewServer()
-	pool := NewPoolServer()
-	containerpool.RegisterContainerPoolServer(poolGrpcServer, pool)
 
-	// start server
-	clis, err := daemonConf.GrpcConn.ContainerListen()
-	if err != nil {
-		log.Fatalf("start server is unable to listen: %v\n", err)
-	}
-	log.Printf("pool server listening in %v, %v", daemonConf.GrpcConn.ContainerAddr, daemonConf.GrpcConn.NetWorkType)
-	defer clis.Close()
+	//poolGrpcServer := grpc.NewServer()
+	//poolSrv := NewPoolServer()
+	//containerpool.RegisterContainerPoolServer(poolGrpcServer, poolSrv)
+
 	containerGrpcServer := grpc.NewServer()
-	containers := NewContainerServer()
-	container.RegisterContainerServer(containerGrpcServer, containers)
+	containerSrv := NewContainerServer()
+	containerSrv.group = &containerGroup
+	Container.RegisterContainerServer(containerGrpcServer, containerSrv)
 
 	go func() {
-		if err := containerGrpcServer.Serve(clis); err != nil {
+		if err := containerGrpcServer.Serve(lis); err != nil {
 			log.Printf("grpc: ContainerServer server failed to serve: %v\n", err)
 			stop <- struct{}{}
 		}
 	}()
 
-	go func() {
-		if err := poolGrpcServer.Serve(lis); err != nil {
-			log.Printf("grpc: pool server failed to serve: %v\n", err)
-			stop <- struct{}{}
-		}
-	}()
+	//go func() {
+	//	if err := poolGrpcServer.Serve(lis); err != nil {
+	//		log.Printf("grpc: pool server failed to serve: %v\n", err)
+	//		stop <- struct{}{}
+	//	}
+	//}()
 
 	go func() {
 	loop:
@@ -116,7 +114,7 @@ func main() {
 			time.Sleep(time.Second)
 			select {
 			case <-stop:
-				poolGrpcServer.GracefulStop()
+				//poolGrpcServer.GracefulStop()
 				containerGrpcServer.GracefulStop()
 				break loop
 			default:
