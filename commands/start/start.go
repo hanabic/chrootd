@@ -28,7 +28,7 @@ var Container = Command{
 
 		log.Printf("connecting to grpc server %s via %s\n", connConf.Addr, connConf.NetWorkType)
 
-		conn, err := grpc.Dial("start", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
+		conn, err := grpc.Dial("start container", grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
 			return connConf.Dial()
 		}))
 		if err != nil {

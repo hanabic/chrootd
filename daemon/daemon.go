@@ -2,26 +2,22 @@ package main
 
 import (
 	"flag"
-	"github.com/xhebox/chrootd/api/container"
-	//"github.com/xhebox/chrootd/api/containerpool"
 	"log"
 	"os"
 	"syscall"
 	"time"
 
 	"github.com/sevlyar/go-daemon"
+	pb_c "github.com/xhebox/chrootd/api/container"
+	pb_p "github.com/xhebox/chrootd/api/containerpool"
 	. "github.com/xhebox/chrootd/common"
 	"google.golang.org/grpc"
 )
-
-
-
 
 var (
 	signal *string
 	stop   = make(chan struct{})
 )
-
 
 func termHandler(sig os.Signal) error {
 	stop <- struct{}{}
@@ -35,8 +31,6 @@ func main() {
 
 	daemonConf := NewDaemonConfig()
 	daemonConf.SetFlag(fs)
-
-	containerGroup := make(map[string]*SingleContainer)
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Fatalln(err)
@@ -85,28 +79,20 @@ func main() {
 	log.Printf("server listening in %v, %v", daemonConf.GrpcConn.Addr, daemonConf.GrpcConn.NetWorkType)
 	defer lis.Close()
 
-	//poolGrpcServer := grpc.NewServer()
-	//poolSrv := NewPoolServer()
-	//containerpool.RegisterContainerPoolServer(poolGrpcServer, poolSrv)
+	grpcServer := grpc.NewServer()
 
-	containerGrpcServer := grpc.NewServer()
-	containerSrv := NewContainerServer()
-	containerSrv.group = &containerGroup
-	Container.RegisterContainerServer(containerGrpcServer, containerSrv)
+	containerSrv := newContainerService()
+	pb_c.RegisterContainerServer(grpcServer, containerSrv)
+
+	poolSrv := newPoolService()
+	pb_p.RegisterContainerPoolServer(grpcServer, poolSrv)
 
 	go func() {
-		if err := containerGrpcServer.Serve(lis); err != nil {
-			log.Printf("grpc: ContainerServer server failed to serve: %v\n", err)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Printf("grpc: containerService server failed to serve: %v\n", err)
 			stop <- struct{}{}
 		}
 	}()
-
-	//go func() {
-	//	if err := poolGrpcServer.Serve(lis); err != nil {
-	//		log.Printf("grpc: pool server failed to serve: %v\n", err)
-	//		stop <- struct{}{}
-	//	}
-	//}()
 
 	go func() {
 	loop:
@@ -114,8 +100,7 @@ func main() {
 			time.Sleep(time.Second)
 			select {
 			case <-stop:
-				//poolGrpcServer.GracefulStop()
-				containerGrpcServer.GracefulStop()
+				grpcServer.GracefulStop()
 				break loop
 			default:
 			}
