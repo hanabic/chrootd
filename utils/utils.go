@@ -1,6 +1,8 @@
 package utils
 
-import "os"
+import (
+	"os"
+)
 
 func PathExist(path string) bool {
 	_, e := os.Stat(path)

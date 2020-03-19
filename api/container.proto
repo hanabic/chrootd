@@ -1,0 +1,116 @@
+syntax = "proto3";
+package api;
+
+option go_package = ".;api";
+
+service Task {
+	// start the container
+	rpc Start (StartReq) returns (StartRes);
+	rpc Stop (StopReq) returns (StopRes);
+	rpc List (ListReq) returns (stream ListRes);
+
+	// start a process
+	rpc ListProc (ListProcReq) returns (stream ListProcRes);
+	rpc Exec (ExecReq) returns (ExecRes);
+	rpc Kill (KillReq) returns (KillRes);
+	rpc IO (stream IOReq) returns (stream IORes);
+	// TODO: add a request to get process info
+}
+
+message StartReq {
+	bytes cntr_id = 1;
+}
+
+message StartRes {
+	// task id or the reason
+	bytes id = 1;
+	// reason of failure, if len(id) == 0
+	string reason = 2;
+}
+
+message StopReq {
+	bytes id = 1;
+}
+
+message StopRes {
+	// reason of failure, if len(reason) == 0
+	string reason = 2;
+}
+
+message Cap {
+	// TODO: handle it!
+}
+
+message Rlimit {
+	// TODO: handle it!
+}
+
+message Proc {
+	// refer https://godoc.org/github.com/opencontainers/runc/libcontainer#Process
+	repeated string args = 1;
+	repeated string env = 2;
+	string user = 3;
+	repeated string groups = 4;
+	string cwd = 5;
+	uint32 consoleWidth = 6;
+	uint32 consoleHeight = 7;
+	repeated Cap caps = 8;
+	bool init = 9;
+	repeated Rlimit rlimits = 10;
+
+	// following fields are not used in Exec message
+	int64 pid = 14;
+}
+
+message ExecReq {
+	bytes id = 1;
+	// if attach == false, use stdout/stderr, and an empty reader
+	bool attach = 2;
+	Proc prog = 3;
+}
+
+message ExecRes {
+	string reason = 1;
+	Proc info = 2;
+}
+
+message KillReq {
+	bytes id = 1;
+	int64 pid = 2;
+}
+
+message KillRes {
+	string reason = 1;
+}
+
+message ListReq {
+	message Filter {
+		string key = 1;
+		string val = 2;
+	}
+	repeated Filter filters = 1;
+}
+
+message ListRes {
+	bytes id = 1;
+}
+
+message IOReq {
+	int64 pid = 1;
+	bytes id = 2;
+	bytes d = 3;
+}
+
+message IORes {
+	string str = 1;
+	bytes d = 2;
+}
+
+message ListProcReq {
+	bytes id = 1;
+}
+
+message ListProcRes {
+	string reason = 1;
+	Proc info = 2;
+}

@@ -1,68 +1,132 @@
 package main
 
 import (
-	"context"
-	"github.com/segmentio/ksuid"
-	"log"
 	"sync"
 
-	pb "github.com/xhebox/chrootd/api/containerpool"
+	"github.com/segmentio/ksuid"
 )
 
+type poolobj interface {
+	SetId(ksuid.KSUID)
+}
+
 type pool struct {
-	statue string
+	sync.Mutex
+	p map[ksuid.KSUID]poolobj
 }
 
 func newPool() *pool {
-	return &pool{}
+	return &pool{
+		p: make(map[ksuid.KSUID]poolobj),
+	}
 }
 
-type poolService struct {
-	pb.UnimplementedContainerPoolServer
-	ContainerGroup sync.Map
-}
+func (pool *pool) Add(o poolobj) ksuid.KSUID {
+	pool.Lock()
+	defer pool.Unlock()
 
-func newPoolService() *poolService {
-	return &poolService{}
-}
-
-func (s *poolService) FindContainer(ctx context.Context, in *pb.Query) (*pb.Reply, error) {
-	log.Println("find containerService request")
-	result := &pb.Reply{
-		Message: "not found",
-		Code:    400,
+	if o == nil {
+		return ksuid.Nil
 	}
 
-	s.ContainerGroup.Range(func(key, value interface{}) bool {
-		if value == in.Name {
-			result.Message = key.(string)
-			result.Code = value.(int32)
+	for i := 0; i < 3; i++ {
+		newid := ksuid.New()
+
+		_, ok := pool.p[newid]
+		if ok {
+			continue
 		}
-		return true
+
+		o.SetId(newid)
+		pool.p[newid] = o
+		return newid
+	}
+
+	return ksuid.Nil
+}
+
+func (pool *pool) Get(id ksuid.KSUID) poolobj {
+	pool.Lock()
+	defer pool.Unlock()
+
+	return pool.p[id]
+}
+
+func (pool *pool) Has(id ksuid.KSUID) bool {
+	return pool.Get(id) != nil
+}
+
+func (pool *pool) Del(id ksuid.KSUID) {
+	pool.Lock()
+	defer pool.Unlock()
+
+	delete(pool.p, id)
+}
+
+func (pool *pool) Range(f func(key ksuid.KSUID, val poolobj) bool) {
+	for k, v := range pool.p {
+		if !f(k, v) {
+			break
+		}
+	}
+}
+
+type cntrPool struct {
+	*pool
+}
+
+func newCntrPool() *cntrPool {
+	return &cntrPool{pool: newPool()}
+}
+
+func (p *cntrPool) Add(i *container) ksuid.KSUID {
+	return p.pool.Add(i)
+}
+
+func (p *cntrPool) Get(id ksuid.KSUID) *container {
+	r := p.pool.Get(id)
+	if r != nil {
+		return r.(*container)
+	}
+	return nil
+}
+
+func (p *cntrPool) Del(id ksuid.KSUID) {
+	p.pool.Del(id)
+}
+
+func (p *cntrPool) Range(f func(key ksuid.KSUID, val *container) bool) {
+	p.pool.Range(func(key ksuid.KSUID, val poolobj) bool {
+		return f(key, val.(*container))
 	})
-
-	if in.IsCreate {
-		id := ksuid.New().String()
-		s.ContainerGroup.Store(id, in.Name)
-		// TODO: create containerService ...
-		return &pb.Reply{Message: id, Code: 200}, nil
-	}
-
-	return &pb.Reply{Message: "not found", Code: 400}, nil
 }
 
-func (s *poolService) SetContainer(ctx context.Context, in *pb.SetRequest) (*pb.Reply, error) {
-	log.Println("set containerService request")
-	switch body := in.Body.(type) {
-	case *pb.SetRequest_Delete:
-		//TODO: delete containerService ...
-		if _, ok := s.ContainerGroup.Load(body.Delete.Id); !ok {
-			return &pb.Reply{Message: "containerService does not exist", Code: 400}, nil
-		}
+type taskPool struct {
+	*pool
+}
 
-		s.ContainerGroup.Delete(body.Delete.Id)
-		return &pb.Reply{Message: "delete containerService successfully", Code: 200}, nil
-	default:
-		return &pb.Reply{Message: "nothing", Code: 200}, nil
+func newTaskPool() *taskPool {
+	return &taskPool{pool: newPool()}
+}
+
+func (p *taskPool) Add(i *task) ksuid.KSUID {
+	return p.pool.Add(i)
+}
+
+func (p *taskPool) Get(id ksuid.KSUID) *task {
+	r := p.pool.Get(id)
+	if r != nil {
+		return r.(*task)
 	}
+	return nil
+}
+
+func (p *taskPool) Del(id ksuid.KSUID) {
+	p.pool.Del(id)
+}
+
+func (p *taskPool) Range(f func(key ksuid.KSUID, val *task) bool) {
+	p.pool.Range(func(key ksuid.KSUID, val poolobj) bool {
+		return f(key, val.(*task))
+	})
 }

@@ -1,113 +1,211 @@
 package main
 
 import (
-	"flag"
-	"log"
+	"context"
+	"errors"
+	"net"
 	"os"
+	"os/exec"
+	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
-	"github.com/sevlyar/go-daemon"
-	pb_c "github.com/xhebox/chrootd/api/container"
-	pb_p "github.com/xhebox/chrootd/api/containerpool"
-	. "github.com/xhebox/chrootd/common"
+	"github.com/go-ini/ini"
+	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"github.com/rs/zerolog"
+	"github.com/urfave/cli/v2"
+	"github.com/xhebox/chrootd/api"
 	"google.golang.org/grpc"
 )
 
 var (
-	signal *string
-	stop   = make(chan struct{})
+	stop           = make(chan struct{})
+	ErrDaemonStart = errors.New("daemon start")
 )
 
-func termHandler(sig os.Signal) error {
-	stop <- struct{}{}
-	log.Println("terminate")
-	return daemon.ErrStop
+type User struct {
+	Logger      zerolog.Logger
+	Network     string
+	Addr        string
+	Timeout     time.Duration
+	ConfPath    string
+	RunPath     string
+	PidFileName string
+	PidFilePerm os.FileMode
+	LogFileName string
+	LogFilePerm os.FileMode
 }
 
 func main() {
-	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
-	signal = fs.String("s", "", `stop — shutdown`)
-
-	daemonConf := NewDaemonConfig()
-	daemonConf.SetFlag(fs)
-
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		log.Fatalln(err)
-	}
-	daemon.AddCommand(daemon.StringFlag(signal, "stop"), syscall.SIGINT, termHandler)
-	daemonConf.LoadEnv()
-
-	if err := daemonConf.ParseIni(); err != nil {
-		log.Fatalln(err)
+	user := &User{
+		Logger: zerolog.New(os.Stdout).With().Timestamp().Logger(),
 	}
 
-	cntxt := &daemon.Context{
-		PidFileName: daemonConf.PidFileName,
-		PidFilePerm: daemonConf.PidFilePerm,
-		LogFileName: daemonConf.LogFileName,
-		LogFilePerm: daemonConf.LogFilePerm,
-		WorkDir:     daemonConf.WorkDir,
-		Umask:       027,
-		Args:        []string{"[go-daemon sample]"},
+	app := &cli.App{
+		UseShortOptionHandling: true,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "addr",
+				Usage:   "server connection addr",
+				Value:   "127.0.0.1:9090",
+				EnvVars: []string{"CHROOTD_CONNADDR"},
+			},
+			&cli.StringFlag{
+				Name:    "network",
+				Usage:   "server connection network type",
+				Value:   "tcp",
+				EnvVars: []string{"CHROOTD_CONNTYPE"},
+			},
+			&cli.DurationFlag{
+				Name:    "timeout",
+				Usage:   "server connection timeout",
+				Value:   10 * time.Second,
+				EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
+			},
+			&cli.StringFlag{
+				Name:    "config",
+				Value:   "/etc/chrootd/conf.ini",
+				EnvVars: []string{"CHROOTD_CONFIG"},
+				Usage:   "daemon config path",
+			},
+			&cli.StringFlag{
+				Name:    "pid",
+				Value:   "chrootd.pid",
+				EnvVars: []string{"CHROOTD_PIDFILE"},
+				Usage:   "daemon pid path",
+			},
+			&cli.StringFlag{
+				Name:    "runpath",
+				Value:   "./container",
+				EnvVars: []string{"CHROOTD_RUN"},
+				Usage:   "daemon run path",
+			},
+			&cli.StringFlag{
+				Name:    "log",
+				Value:   "chrootd.log",
+				EnvVars: []string{"CHROOTD_LOGFILE"},
+				Usage:   "daemon log path",
+			},
+			&cli.IntFlag{
+				Name:  "loglevel",
+				Value: 1,
+				Usage: "set log level\n0 - debug\n1 - info\n2 - warn\n3 - error",
+			},
+			&cli.BoolFlag{
+				Name:  "daemon",
+				Value: false,
+				Usage: "start in background",
+			},
+		},
+		Action: func(c *cli.Context) error {
+			user := c.Context.Value("_data").(*User)
+
+			if c.Bool("daemon") {
+				return ErrDaemonStart
+			}
+
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+			go func() {
+				<-sigs
+				stop <- struct{}{}
+			}()
+
+			user.ConfPath = c.String("config")
+			user.PidFileName = c.String("pid")
+			user.LogFileName = c.String("log")
+
+			file, err := ini.Load(user.ConfPath)
+			if err != nil {
+				return err
+			}
+
+			if err := file.Section("DAEMON").MapTo(user); err != nil {
+				return err
+			}
+
+			user.Network = c.String("network")
+			user.Addr = c.String("addr")
+			user.Timeout = c.Duration("timeout")
+			switch c.Int("loglevel") {
+			case 0:
+				user.Logger = user.Logger.Level(zerolog.DebugLevel)
+			case 1:
+				user.Logger = user.Logger.Level(zerolog.InfoLevel)
+			case 2:
+				user.Logger = user.Logger.Level(zerolog.WarnLevel)
+			case 3:
+				user.Logger = user.Logger.Level(zerolog.ErrorLevel)
+			}
+			user.RunPath = c.String("runpath")
+
+			user.Logger.Log().Msgf("daemon started, logleve - %s", user.Logger.GetLevel())
+
+			lis, err := net.Listen(user.Network, user.Addr)
+			if err != nil {
+				return err
+			}
+			defer lis.Close()
+
+			cntrPool := newCntrPool()
+			taskPool := newTaskPool()
+
+			grpcServer := grpc.NewServer(grpc.ConnectionTimeout(user.Timeout))
+
+			poolServer := newPoolServer(user, cntrPool)
+			defer poolServer.Close()
+			api.RegisterContainerPoolServer(grpcServer, poolServer)
+
+			taskServer, err := newTaskServer(user, cntrPool, taskPool)
+			if err != nil {
+				return err
+			}
+			defer taskServer.Close()
+			api.RegisterTaskServer(grpcServer, taskServer)
+
+			user.Logger.Info().Msgf("listening server in [%s]%s", user.Network, user.Addr)
+			go func() {
+				if err := grpcServer.Serve(lis); err != nil {
+					stop <- struct{}{}
+					user.Logger.Error().Err(err).Msg("fail to serve")
+				}
+			}()
+
+		loop:
+			for {
+				select {
+				case <-stop:
+					grpcServer.GracefulStop()
+					break loop
+				default:
+					time.Sleep(500 * time.Microsecond)
+				}
+			}
+
+			return nil
+		},
 	}
 
-	if len(daemon.ActiveFlags()) > 0 {
-		d, err := cntxt.Search()
-		if err != nil {
-			log.Fatalf("Unable send signal to the daemon: %v\n", err)
-		}
-		daemon.SendCommands(d)
-		return
-	}
+	ctx := context.WithValue(context.Background(), "_data", user)
 
-	d, err := cntxt.Reborn()
-	if err != nil {
-		log.Fatalf("Unable to run: %v\n", err)
-	}
-	if d != nil {
-		return
-	}
-	defer cntxt.Release()
-
-	log.Println("daemon started")
-
-	lis, err := daemonConf.GrpcConn.Listen()
-	if err != nil {
-		log.Fatalf("server is unable to listen: %v\n", err)
-	}
-	log.Printf("server listening in %v, %v", daemonConf.GrpcConn.Addr, daemonConf.GrpcConn.NetWorkType)
-	defer lis.Close()
-
-	grpcServer := grpc.NewServer()
-
-	containerSrv := newContainerService()
-	pb_c.RegisterContainerServer(grpcServer, containerSrv)
-
-	poolSrv := newPoolService()
-	pb_p.RegisterContainerPoolServer(grpcServer, poolSrv)
-
-	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Printf("grpc: containerService server failed to serve: %v\n", err)
-			stop <- struct{}{}
-		}
-	}()
-
-	go func() {
-	loop:
-		for {
-			time.Sleep(time.Second)
-			select {
-			case <-stop:
-				grpcServer.GracefulStop()
-				break loop
+	err := app.RunContext(ctx, os.Args)
+	if err == ErrDaemonStart {
+		skip := false
+		args := make([]string, len(os.Args)-1)
+		for _, v := range os.Args[1:] {
+			switch {
+			case v == "--daemon":
+				skip = true
+			case strings.HasPrefix(v, "--daemon=") || v == "-d" || skip:
+				skip = false
 			default:
+				args = append(args, v)
 			}
 		}
-	}()
-
-	if err = daemon.ServeSignals(); err != nil {
-		log.Printf("Fail to serve signals: %v\n", err)
+		cmd := exec.Command(os.Args[0], args...)
+		cmd.Start()
+	} else if err != nil {
+		user.Logger.Fatal().Msg(err.Error())
 	}
 }

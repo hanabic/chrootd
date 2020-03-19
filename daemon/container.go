@@ -1,53 +1,55 @@
 package main
 
 import (
-	pb "github.com/xhebox/chrootd/api/container"
-	"io"
 	"sync"
+
+	"github.com/segmentio/ksuid"
+	"github.com/xhebox/chrootd/api"
 )
 
 type container struct {
-	id     string
-	name   string
-	statue string
+	sync.Mutex
+	*api.Container
+
+	busy bool
+	id   ksuid.KSUID
 }
 
-type containerService struct {
-	pb.UnimplementedContainerServer
-	containerMap *sync.Map
-}
-
-func newContainer(id string, name string) *container {
-	return &container{id: id, name: name, statue: "close"}
-}
-
-func newContainerService() *containerService {
-	return &containerService{
-		containerMap: new(sync.Map),
+func newCntr(meta *api.Container) *container {
+	return &container{
+		id: ksuid.Nil,
+		Container: meta,
 	}
 }
 
-func (service *containerService) Handle(srv pb.Container_HandleServer) error {
-	cnt := int32(0)
-	var currentId string
-	for {
-		data, err := srv.Recv()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-		cnt++
-		switch d := data.Payload.(type) {
-		case *pb.Packet_Id:
-			currentId = d.Id
-		default:
-			if _, ok := (*service.containerMap).Load(currentId); ok {
-			} else {
-				return srv.SendAndClose(&pb.Reply{Seq: cnt, Code: 400, Message: "container not exits"})
-			}
-		}
+func (s *container) SetId(id ksuid.KSUID) {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.id != ksuid.Nil {
+		return
 	}
-	return srv.SendAndClose(&pb.Reply{Seq: cnt, Code: 200, Message: "success", Type: "id"})
+
+	s.id = id
+	s.Id = id.Bytes()
+}
+
+func (s *container) UpdateMeta(meta *api.Container) {
+	s.Lock()
+	defer s.Unlock()
+
+	// TODO: Copy & overwrite as needed
+	// TODO: add more until metadata struct definition is freezed
+	s.Name = meta.Name
+}
+
+func (s *container) IsBusy() bool {
+	s.Lock()
+	defer s.Unlock()
+
+	return s.busy
+}
+
+func (s *container) Destroy() {
+	// TODO: it's a stub
 }
