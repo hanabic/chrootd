@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-ini/ini"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2/altsrc"
 	"github.com/xhebox/chrootd/api"
 	"google.golang.org/grpc"
 )
@@ -42,62 +42,66 @@ func main() {
 		Logger: zerolog.New(os.Stdout).With().Timestamp().Logger(),
 	}
 
-	app := &cli.App{
-		UseShortOptionHandling: true,
-		Flags: []cli.Flag{
+	flags := []cli.Flag{
 			&cli.StringFlag{
+				Name:    "config",
+				Aliases: []string{"c"},
+				Value:   "/etc/chrootd/conf",
+				EnvVars: []string{"CHROOTD_CONFIG"},
+				Usage:   "load toml config from `FILE`",
+			},
+			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:    "addr",
 				Usage:   "server connection addr",
 				Value:   "127.0.0.1:9090",
 				EnvVars: []string{"CHROOTD_CONNADDR"},
-			},
-			&cli.StringFlag{
+			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:    "network",
 				Usage:   "server connection network type",
 				Value:   "tcp",
 				EnvVars: []string{"CHROOTD_CONNTYPE"},
-			},
-			&cli.DurationFlag{
+			}),
+			altsrc.NewDurationFlag(&cli.DurationFlag{
 				Name:    "timeout",
 				Usage:   "server connection timeout",
 				Value:   10 * time.Second,
 				EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
-			},
-			&cli.StringFlag{
-				Name:    "config",
-				Value:   "/etc/chrootd/conf.ini",
-				EnvVars: []string{"CHROOTD_CONFIG"},
-				Usage:   "daemon config path",
-			},
-			&cli.StringFlag{
+			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:    "pid",
 				Value:   "chrootd.pid",
 				EnvVars: []string{"CHROOTD_PIDFILE"},
 				Usage:   "daemon pid path",
-			},
-			&cli.StringFlag{
+			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:    "runpath",
 				Value:   "./container",
 				EnvVars: []string{"CHROOTD_RUN"},
 				Usage:   "daemon run path",
-			},
-			&cli.StringFlag{
+			}),
+			altsrc.NewStringFlag(&cli.StringFlag{
 				Name:    "log",
 				Value:   "chrootd.log",
 				EnvVars: []string{"CHROOTD_LOGFILE"},
 				Usage:   "daemon log path",
-			},
-			&cli.IntFlag{
+			}),
+			altsrc.NewIntFlag(&cli.IntFlag{
 				Name:  "loglevel",
 				Value: 1,
 				Usage: "set log level\n0 - debug\n1 - info\n2 - warn\n3 - error",
-			},
-			&cli.BoolFlag{
+			}),
+			altsrc.NewBoolFlag(&cli.BoolFlag{
 				Name:  "daemon",
 				Value: false,
 				Usage: "start in background",
-			},
-		},
+			}),
+		}
+
+	app := &cli.App{
+		UseShortOptionHandling: true,
+		Flags: flags,
+		Before: altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config")),
 		Action: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
@@ -113,21 +117,13 @@ func main() {
 			}()
 
 			user.ConfPath = c.String("config")
+			user.Timeout = c.Duration("timeout")
 			user.PidFileName = c.String("pid")
 			user.LogFileName = c.String("log")
-
-			file, err := ini.Load(user.ConfPath)
-			if err != nil {
-				return err
-			}
-
-			if err := file.Section("DAEMON").MapTo(user); err != nil {
-				return err
-			}
-
 			user.Network = c.String("network")
 			user.Addr = c.String("addr")
-			user.Timeout = c.Duration("timeout")
+			user.RunPath = c.String("runpath")
+
 			switch c.Int("loglevel") {
 			case 0:
 				user.Logger = user.Logger.Level(zerolog.DebugLevel)
@@ -138,7 +134,6 @@ func main() {
 			case 3:
 				user.Logger = user.Logger.Level(zerolog.ErrorLevel)
 			}
-			user.RunPath = c.String("runpath")
 
 			user.Logger.Log().Msgf("daemon started, logleve - %s", user.Logger.GetLevel())
 
