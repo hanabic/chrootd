@@ -13,7 +13,6 @@ import (
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
 	"github.com/segmentio/ksuid"
 	"github.com/xhebox/chrootd/api"
-	"golang.org/x/sys/unix"
 )
 
 func init() {
@@ -80,87 +79,26 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 		return &api.StartRes{Id: nil, Reason: "can not alloc uid"}, nil
 	}
 
-	defaultMountFlags := unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
-	cfg := &configs.Config{
-		// TODO: construct config from container metadata
-		Rootfs: meta.Rootfs,
-		Capabilities: &configs.Capabilities{
-			Bounding: []string{
-				"CAP_SETUID",
-				"CAP_SETGID",
-			},
-			Effective: []string{
-				"CAP_SETUID",
-				"CAP_SETGID",
-			},
-			Inheritable: []string{
-				"CAP_SETUID",
-				"CAP_SETGID",
-			},
-			Permitted: []string{
-				"CAP_SETUID",
-				"CAP_SETGID",
-			},
-			Ambient: []string{
-				"CAP_SETUID",
-				"CAP_SETGID",
-			},
+	cfg := &meta.Config
+
+	// TODO: not all options can be passed from cli
+	// need an permission filter
+
+	// allow rootless
+	cfg.RootlessEUID = true
+	cfg.RootlessCgroups = true
+	cfg.UidMappings = []configs.IDMap{
+		{
+			ContainerID: 0,
+			HostID:      os.Getuid(),
+			Size:        65536,
 		},
-		Cgroups: &configs.Cgroup{
-			Name:   "Test",
-			Parent: "system",
-			Resources: &configs.Resources{
-				MemorySwappiness: nil,
-				AllowAllDevices:  nil,
-				AllowedDevices:   configs.DefaultAllowedDevices,
-			},
-		},
-		Namespaces: configs.Namespaces([]configs.Namespace{
-			{Type: configs.NEWUTS},
-			{Type: configs.NEWIPC},
-			{Type: configs.NEWPID},
-			{Type: configs.NEWNET},
-			{Type: configs.NEWNS},
-			{Type: configs.NEWUSER},
-		}),
-		Devices: configs.DefaultAutoCreatedDevices,
-		Mounts: []*configs.Mount{
-			{
-				Source:      "proc",
-				Destination: "/proc",
-				Device:      "proc",
-				Flags:       defaultMountFlags,
-			},
-			{
-				Source:      "tmpfs",
-				Destination: "/dev",
-				Device:      "tmpfs",
-				Flags:       unix.MS_NOSUID | unix.MS_STRICTATIME,
-				Data:        "mode=755",
-			},
-			{
-				Source:      "sysfs",
-				Destination: "/sys",
-				Device:      "sysfs",
-				Flags:       defaultMountFlags | unix.MS_RDONLY,
-			},
-		},
-		// allow rootless
-		RootlessEUID:    true,
-		RootlessCgroups: true,
-		UidMappings: []configs.IDMap{
-			{
-				ContainerID: 0,
-				HostID:      os.Getuid(),
-				Size:        65536,
-			},
-		},
-		GidMappings: []configs.IDMap{
-			{
-				ContainerID: 0,
-				HostID:      os.Getgid(),
-				Size:        65536,
-			},
+	}
+	cfg.GidMappings = []configs.IDMap{
+		{
+			ContainerID: 0,
+			HostID:      os.Getgid(),
+			Size:        65536,
 		},
 	}
 

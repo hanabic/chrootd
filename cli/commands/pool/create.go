@@ -3,16 +3,83 @@ package pool
 import (
 	"fmt"
 
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/segmentio/ksuid"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/api"
 	. "github.com/xhebox/chrootd/cli/types"
+	"golang.org/x/sys/unix"
 )
 
 func metaFromCli(c *cli.Context) *api.Metainfo {
+	defaultMountFlags := unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
+
 	return &api.Metainfo{
-		Name:   c.String("name"),
-		Rootfs: c.String("rootfs"),
+		Name: c.String("name"),
+		Config: configs.Config{
+			Rootfs: c.String("rootfs"),
+			Capabilities: &configs.Capabilities{
+				Bounding: []string{
+					"CAP_SETUID",
+					"CAP_SETGID",
+				},
+				Effective: []string{
+					"CAP_SETUID",
+					"CAP_SETGID",
+				},
+				Inheritable: []string{
+					"CAP_SETUID",
+					"CAP_SETGID",
+				},
+				Permitted: []string{
+					"CAP_SETUID",
+					"CAP_SETGID",
+				},
+				Ambient: []string{
+					"CAP_SETUID",
+					"CAP_SETGID",
+				},
+			},
+			Cgroups: &configs.Cgroup{
+				Name:   "Test",
+				Parent: "system",
+				Resources: &configs.Resources{
+					MemorySwappiness: nil,
+					AllowAllDevices:  nil,
+					AllowedDevices:   configs.DefaultAllowedDevices,
+				},
+			},
+			Namespaces: configs.Namespaces([]configs.Namespace{
+				{Type: configs.NEWUTS},
+				{Type: configs.NEWIPC},
+				{Type: configs.NEWPID},
+				{Type: configs.NEWNET},
+				{Type: configs.NEWNS},
+				{Type: configs.NEWUSER},
+			}),
+			Devices: configs.DefaultAutoCreatedDevices,
+			Mounts: []*configs.Mount{
+				{
+					Source:      "proc",
+					Destination: "/proc",
+					Device:      "proc",
+					Flags:       defaultMountFlags,
+				},
+				{
+					Source:      "tmpfs",
+					Destination: "/dev",
+					Device:      "tmpfs",
+					Flags:       unix.MS_NOSUID | unix.MS_STRICTATIME,
+					Data:        "mode=755",
+				},
+				{
+					Source:      "sysfs",
+					Destination: "/sys",
+					Device:      "sysfs",
+					Flags:       defaultMountFlags | unix.MS_RDONLY,
+				},
+			},
+		},
 	}
 }
 

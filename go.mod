@@ -12,6 +12,7 @@ require (
 	github.com/rs/zerolog v1.18.0
 	github.com/segmentio/ksuid v1.0.2
 	github.com/urfave/cli/v2 v2.2.0
+	go.etcd.io/bbolt v1.3.4
 	golang.org/x/sys v0.0.0-20200217220822-9197077df867
 	google.golang.org/grpc v1.27.1
 	google.golang.org/protobuf v1.20.1

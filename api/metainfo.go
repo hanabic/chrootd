@@ -1,11 +1,15 @@
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/opencontainers/runc/libcontainer/configs"
+)
 
 type Metainfo struct {
-	Id     []byte
-	Name   string
-	Rootfs string
+	Id     []byte         `json:"id"`
+	Name   string         `json:"name"`
+	Config configs.Config `json:"config"`
 }
 
 func NewMetaFromBytes(bytes []byte) (*Metainfo, error) {
