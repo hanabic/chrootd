@@ -9,20 +9,16 @@ service ContainerPool {
 	rpc Create (CreateReq) returns (CreateRes);
 	rpc Update (UpdateReq) returns (UpdateRes);
 	rpc Delete (DeleteReq) returns (DeleteRes);
-	rpc List (ListReq) returns (stream Container);
+	rpc List (ListReq) returns (stream ListRes2);
 }
 
-message Container {
+message ListRes2 {
 	bytes id = 1;
-	string name = 2;
-	map<string, bytes> attrs = 3;
-	string rootfs = 4;
-	// TODO: add more config here
-	// refer libcontainer/configs.Config
+	bytes config = 2;
 }
 
 message CreateReq {
-	Container container = 1;
+	bytes config = 1;
 }
 
 message CreateRes {
@@ -33,13 +29,11 @@ message CreateRes {
 
 message UpdateReq {
 	bytes id = 1;
-	// assign as needs style copy
-	Container container = 2;
+	bytes config = 2;
 }
 
 message UpdateRes {
-	// updated container metadata
-	Container container = 1;
+	bytes config = 1;
 	// reason of failure, if container == nil
 	string reason = 2;
 }

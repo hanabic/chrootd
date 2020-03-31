@@ -20,7 +20,6 @@ import (
 )
 
 var (
-	stop           = make(chan struct{})
 	ErrDaemonStart = errors.New("daemon start")
 )
 
@@ -31,6 +30,7 @@ type User struct {
 	Timeout     time.Duration
 	ConfPath    string
 	RunPath     string
+	CntrPath    string
 	PidFileName string
 	PidFilePerm os.FileMode
 	LogFileName string
@@ -43,65 +43,71 @@ func main() {
 	}
 
 	flags := []cli.Flag{
-			&cli.StringFlag{
-				Name:    "config",
-				Aliases: []string{"c"},
-				Value:   "/etc/chrootd/conf",
-				EnvVars: []string{"CHROOTD_CONFIG"},
-				Usage:   "load toml config from `FILE`",
-			},
-			altsrc.NewStringFlag(&cli.StringFlag{
-				Name:    "addr",
-				Usage:   "server connection addr",
-				Value:   "127.0.0.1:9090",
-				EnvVars: []string{"CHROOTD_CONNADDR"},
-			}),
-			altsrc.NewStringFlag(&cli.StringFlag{
-				Name:    "network",
-				Usage:   "server connection network type",
-				Value:   "tcp",
-				EnvVars: []string{"CHROOTD_CONNTYPE"},
-			}),
-			altsrc.NewDurationFlag(&cli.DurationFlag{
-				Name:    "timeout",
-				Usage:   "server connection timeout",
-				Value:   10 * time.Second,
-				EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
-			}),
-			altsrc.NewStringFlag(&cli.StringFlag{
-				Name:    "pid",
-				Value:   "chrootd.pid",
-				EnvVars: []string{"CHROOTD_PIDFILE"},
-				Usage:   "daemon pid path",
-			}),
-			altsrc.NewStringFlag(&cli.StringFlag{
-				Name:    "runpath",
-				Value:   "./container",
-				EnvVars: []string{"CHROOTD_RUN"},
-				Usage:   "daemon run path",
-			}),
-			altsrc.NewStringFlag(&cli.StringFlag{
-				Name:    "log",
-				Value:   "chrootd.log",
-				EnvVars: []string{"CHROOTD_LOGFILE"},
-				Usage:   "daemon log path",
-			}),
-			altsrc.NewIntFlag(&cli.IntFlag{
-				Name:  "loglevel",
-				Value: 1,
-				Usage: "set log level\n0 - debug\n1 - info\n2 - warn\n3 - error",
-			}),
-			altsrc.NewBoolFlag(&cli.BoolFlag{
-				Name:  "daemon",
-				Value: false,
-				Usage: "start in background",
-			}),
-		}
+		&cli.StringFlag{
+			Name:    "config",
+			Aliases: []string{"c"},
+			Value:   "/etc/chrootd/conf",
+			EnvVars: []string{"CHROOTD_CONFIG"},
+			Usage:   "load toml config from `FILE`",
+		},
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "addr",
+			Usage:   "server connection addr",
+			Value:   "127.0.0.1:9090",
+			EnvVars: []string{"CHROOTD_CONNADDR"},
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "network",
+			Usage:   "server connection network type",
+			Value:   "tcp",
+			EnvVars: []string{"CHROOTD_CONNTYPE"},
+		}),
+		altsrc.NewDurationFlag(&cli.DurationFlag{
+			Name:    "timeout",
+			Usage:   "server connection timeout",
+			Value:   10 * time.Second,
+			EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "pid",
+			Value:   "chrootd.pid",
+			EnvVars: []string{"CHROOTD_PIDFILE"},
+			Usage:   "daemon pid path",
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "runpath",
+			Value:   "/var/run/container",
+			EnvVars: []string{"CHROOTD_RUNPATH"},
+			Usage:   "daemon run path",
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "cntrpath",
+			Usage:   "container persistence storage path",
+			Value:   "/etc/chrootd/containers",
+			EnvVars: []string{"CHROOTD_CNTRPATH"},
+		}),
+		altsrc.NewStringFlag(&cli.StringFlag{
+			Name:    "log",
+			Value:   "chrootd.log",
+			EnvVars: []string{"CHROOTD_LOGFILE"},
+			Usage:   "daemon log path",
+		}),
+		altsrc.NewIntFlag(&cli.IntFlag{
+			Name:  "loglevel",
+			Value: 1,
+			Usage: "set log level\n0 - debug\n1 - info\n2 - warn\n3 - error",
+		}),
+		altsrc.NewBoolFlag(&cli.BoolFlag{
+			Name:  "daemon",
+			Value: false,
+			Usage: "start in background",
+		}),
+	}
 
 	app := &cli.App{
 		UseShortOptionHandling: true,
-		Flags: flags,
-		Before: altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config")),
+		Flags:                  flags,
+		Before:                 altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config")),
 		Action: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
@@ -111,10 +117,6 @@ func main() {
 
 			sigs := make(chan os.Signal, 1)
 			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-			go func() {
-				<-sigs
-				stop <- struct{}{}
-			}()
 
 			user.ConfPath = c.String("config")
 			user.Timeout = c.Duration("timeout")
@@ -123,6 +125,7 @@ func main() {
 			user.Network = c.String("network")
 			user.Addr = c.String("addr")
 			user.RunPath = c.String("runpath")
+			user.CntrPath = c.String("cntrpath")
 
 			switch c.Int("loglevel") {
 			case 0:
@@ -143,13 +146,17 @@ func main() {
 			}
 			defer lis.Close()
 
-			cntrPool := newCntrPool()
+			cntrPool, err := newCntrPool(user.CntrPath)
+			if err != nil {
+				return err
+			}
+			defer cntrPool.Close()
+
 			taskPool := newTaskPool()
 
 			grpcServer := grpc.NewServer(grpc.ConnectionTimeout(user.Timeout))
 
 			poolServer := newPoolServer(user, cntrPool)
-			defer poolServer.Close()
 			api.RegisterContainerPoolServer(grpcServer, poolServer)
 
 			taskServer, err := newTaskServer(user, cntrPool, taskPool)
@@ -162,7 +169,7 @@ func main() {
 			user.Logger.Info().Msgf("listening server in [%s]%s", user.Network, user.Addr)
 			go func() {
 				if err := grpcServer.Serve(lis); err != nil {
-					stop <- struct{}{}
+					sigs <- syscall.SIGINT
 					user.Logger.Error().Err(err).Msg("fail to serve")
 				}
 			}()
@@ -170,8 +177,11 @@ func main() {
 		loop:
 			for {
 				select {
-				case <-stop:
-					grpcServer.GracefulStop()
+				case sig := <-sigs:
+					if sig == syscall.SIGINT {
+						cntrPool.Close()
+						grpcServer.GracefulStop()
+					}
 					break loop
 				default:
 					time.Sleep(500 * time.Microsecond)

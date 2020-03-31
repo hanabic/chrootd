@@ -48,7 +48,8 @@ var List = &cli.Command{
 			}
 
 			id, _ := ksuid.FromBytes(cntr.Id)
-			data.Logger.Info().Msgf("container[%s]: %s", id, cntr.Name)
+			config, _ := api.NewMetaFromBytes(cntr.Config)
+			data.Logger.Info().Msgf("container[%s]: %+v", id, config)
 		}
 
 		return nil

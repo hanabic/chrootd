@@ -68,17 +68,12 @@ func (s *taskServer) Close() {
 func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes, error) {
 	s.user.Logger.Info().Msgf("request to start task[%p]", req)
 
-	id, err := ksuid.FromBytes(req.CntrId)
+	meta, err := s.cntrs.StartMeta(req.CntrId)
 	if err != nil {
-		return &api.StartRes{Id: nil, Reason: "invalid id"}, nil
-	}
-
-	cntr := s.cntrs.Get(id)
-	if cntr == nil {
 		return &api.StartRes{Id: nil, Reason: "no container of such id"}, nil
 	}
 
-	task := newTask(cntr)
+	task := newTask(meta)
 
 	tid := s.tasks.Add(task)
 	if tid == ksuid.Nil {
@@ -88,7 +83,7 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 	defaultMountFlags := unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
 	cfg := &configs.Config{
 		// TODO: construct config from container metadata
-		Rootfs: cntr.Rootfs,
+		Rootfs: meta.Rootfs,
 		Capabilities: &configs.Capabilities{
 			Bounding: []string{
 				"CAP_SETUID",
@@ -183,7 +178,7 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 
 	uid, _ := cfg.HostRootUID()
 	gid, _ := cfg.HostRootGID()
-	s.user.Logger.Debug().Msgf("start task[%p]: %v, %v, %v", req, uid, gid, cntr)
+	s.user.Logger.Debug().Msgf("start task[%p]: %v, %v, %v", req, uid, gid, meta)
 	return &api.StartRes{Id: tid.Bytes()}, nil
 }
 
@@ -208,6 +203,7 @@ func (s *taskServer) Stop(c context.Context, req *api.StopReq) (*api.StopRes, er
 		return &api.StopRes{Reason: err.Error()}, nil
 	}
 
+	s.cntrs.StopMeta(task.meta.Id)
 	s.tasks.Del(id)
 
 	return &api.StopRes{}, nil

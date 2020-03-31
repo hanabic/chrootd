@@ -9,6 +9,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/segmentio/ksuid"
+	"github.com/xhebox/chrootd/api"
 )
 
 type process struct {
@@ -23,13 +24,13 @@ type process struct {
 type task struct {
 	sync.Mutex
 	id    ksuid.KSUID
-	meta  *container
+	meta  *api.Metainfo
 	cntr  libcontainer.Container
 	procs []*process
 }
 
-func newTask(cntr *container) *task {
-	return &task{id: ksuid.Nil, meta: cntr}
+func newTask(meta *api.Metainfo) *task {
+	return &task{id: ksuid.Nil, meta: meta}
 }
 
 func (t *task) SetId(id ksuid.KSUID) {

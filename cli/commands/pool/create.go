@@ -9,8 +9,8 @@ import (
 	. "github.com/xhebox/chrootd/cli/types"
 )
 
-func fromCli(c *cli.Context) *api.Container {
-	return &api.Container{
+func metaFromCli(c *cli.Context) *api.Metainfo {
+	return &api.Metainfo{
 		Name:   c.String("name"),
 		Rootfs: c.String("rootfs"),
 	}
@@ -37,7 +37,14 @@ var Create = &cli.Command{
 
 		client := api.NewContainerPoolClient(data.Conn)
 
-		res, err := client.Create(c.Context, &api.CreateReq{Container: fromCli(c)})
+		m := metaFromCli(c)
+
+		cfg, err := m.ToBytes()
+		if err != nil {
+			return fmt.Errorf("fail to create: %s", err)
+		}
+
+		res, err := client.Create(c.Context, &api.CreateReq{Config: cfg})
 		if err != nil {
 			return fmt.Errorf("fail to create: %s", err)
 		}

@@ -1,3 +1,6 @@
 daemon
 rootfs
 main
+*.toml
+container/
+start

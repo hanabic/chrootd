@@ -40,16 +40,24 @@ var Update = &cli.Command{
 			return err
 		}
 
-		res, err := client.Update(c.Context, &api.UpdateReq{Id: id.Bytes(), Container: fromCli(c)})
+		m := metaFromCli(c)
+
+		cfg, err := m.ToBytes()
+		if err != nil {
+			return fmt.Errorf("fail to create: %s", err)
+		}
+
+		res, err := client.Update(c.Context, &api.UpdateReq{Id: id.Bytes(), Config: cfg})
 		if err != nil {
 			return fmt.Errorf("fail to update container[%s]: %w", id, err)
 		}
 
-		cntr := res.Container
+		cntr := res.Config
 		if cntr == nil {
 			data.Logger.Info().Msgf("fail to update container[%s]: %s", id, res.Reason)
 		} else {
-			data.Logger.Info().Msgf("updated container[%s]: %s", id, cntr.Name)
+			config, _ := api.NewMetaFromBytes(cntr)
+			data.Logger.Info().Msgf("updated container[%s]: %s", id, config)
 		}
 
 		return nil
