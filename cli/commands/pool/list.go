@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/urfave/cli/v2"
 	"github.com/segmentio/ksuid"
+	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/api"
 	. "github.com/xhebox/chrootd/cli/types"
 )
@@ -17,7 +17,22 @@ var List = &cli.Command{
 		&cli.StringFlag{
 			Name:  "name",
 			Value: "*",
-			Usage: "containere name",
+			Usage: "container name",
+		},
+		&cli.StringFlag{
+			Name:  "id",
+			Value: "*",
+			Usage: "container id",
+		},
+		&cli.StringFlag{
+			Name:  "label",
+			Value: "*",
+			Usage: "container label",
+		},
+		&cli.StringFlag{
+			Name:  "hostname",
+			Value: "*",
+			Usage: "container hostname",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -27,7 +42,6 @@ var List = &cli.Command{
 
 		stream, err := client.List(c.Context, &api.ListReq{
 			Filters: []*api.ListReq_Filter{
-				// TODO: add more filters
 				&api.ListReq_Filter{
 					Key: "name",
 					Val: c.String("name"),

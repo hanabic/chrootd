@@ -60,7 +60,8 @@ func (s *poolServer) List(req *api.ListReq, srv api.ContainerPool_ListServer) er
 
 	var err error
 
-	var nameGlob glob.Glob
+	var nameGlob, labelGlob, idGlob  glob.Glob
+
 
 	s.cntrs.ForEach(func(id []byte, b *bolt.Bucket) error {
 		metadata := b.Get([]byte("metadata"))
@@ -73,7 +74,6 @@ func (s *poolServer) List(req *api.ListReq, srv api.ContainerPool_ListServer) er
 
 		for _, filter := range req.Filters {
 			switch filter.Key {
-			// TODO: more filters
 			case "name":
 				if nameGlob == nil {
 					nameGlob, err = glob.Compile(filter.Val)
@@ -83,6 +83,50 @@ func (s *poolServer) List(req *api.ListReq, srv api.ContainerPool_ListServer) er
 				}
 
 				if !nameGlob.Match(m.Name) {
+					r = false
+					break
+				}
+			case "label":
+				if labelGlob == nil {
+					labelGlob, err = glob.Compile(filter.Val)
+					if err != nil {
+						return err
+					}
+				}
+
+				isBreak := false
+
+				for _, v := range m.Config.Labels {
+					if !labelGlob.Match(v) {
+						r = false
+						isBreak = true
+						break
+					}
+				}
+				if isBreak {
+					break
+				}
+			case "id":
+				if idGlob == nil {
+					idGlob, err = glob.Compile(filter.Val)
+					if err != nil {
+						return err
+					}
+				}
+
+				if !idGlob.Match(string(m.Id)) {
+					r = false
+					break
+				}
+			case "hostname":
+				if nameGlob == nil {
+					nameGlob, err = glob.Compile(filter.Val)
+					if err != nil {
+						return err
+					}
+				}
+
+				if !nameGlob.Match(string(m.Config.Hostname)) {
 					r = false
 					break
 				}
