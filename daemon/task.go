@@ -23,14 +23,15 @@ type process struct {
 // TODO: should clear dead process by some interval
 type task struct {
 	sync.Mutex
-	id    ksuid.KSUID
-	meta  *api.Metainfo
-	cntr  libcontainer.Container
-	procs []*process
+	id     ksuid.KSUID
+	meta   *api.Metainfo
+	cntr   libcontainer.Container
+	procs  []*process
+	isInit bool
 }
 
 func newTask(meta *api.Metainfo) *task {
-	return &task{id: ksuid.Nil, meta: meta}
+	return &task{id: ksuid.Nil, meta: meta, isInit: false}
 }
 
 func (t *task) SetId(id ksuid.KSUID) {

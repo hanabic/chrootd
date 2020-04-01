@@ -251,14 +251,17 @@ func (s *taskServer) Exec(ctx context.Context, req *api.ExecReq) (*api.ExecRes, 
 		Cwd:              info.Cwd,
 		ConsoleWidth:     uint16(info.ConsoleWidth),
 		ConsoleHeight:    uint16(info.ConsoleHeight),
-		Init:             info.Init,
+		Init:             task.isInit,
 		// TODO: handle rlimits/caps
-		// TODO: should set init process automatically, and check if it's valid
 	}
 
 	if err := task.Exec(proc, req.Attach); err != nil {
 		s.user.Logger.Warn().Err(err).Msgf("fail to run process[%p]", req)
 		return nil, err
+	}
+
+	if !task.isInit {
+		task.isInit = true
 	}
 
 	return &api.ExecRes{Info: infoFromProc(proc)}, nil

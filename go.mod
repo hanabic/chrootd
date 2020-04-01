@@ -15,5 +15,5 @@ require (
 	go.etcd.io/bbolt v1.3.4
 	golang.org/x/sys v0.0.0-20200217220822-9197077df867
 	google.golang.org/grpc v1.27.1
-	google.golang.org/protobuf v1.20.1
+	google.golang.org/protobuf v1.20.1 // indirect
 )
