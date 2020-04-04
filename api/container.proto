@@ -13,7 +13,8 @@ service Task {
 	rpc ListProc (ListProcReq) returns (stream ListProcRes);
 	rpc Exec (ExecReq) returns (ExecRes);
 	rpc Kill (KillReq) returns (KillRes);
-	rpc IO (stream IOReq) returns (stream IORes);
+	rpc Read (ReadReq) returns (ReadRes);
+	rpc Write (WriteReq) returns (WriteRes);
 	// TODO: add a request to get process info
 }
 
@@ -95,15 +96,25 @@ message ListRes {
 	bytes id = 1;
 }
 
-message IOReq {
+message ReadReq {
+	int64 pid = 1;
+	bytes id = 2;
+	string type = 3;
+}
+
+message ReadRes {
+	bytes d = 1;
+	string reason = 2;
+}
+
+message WriteReq {
 	int64 pid = 1;
 	bytes id = 2;
 	bytes d = 3;
 }
 
-message IORes {
-	string str = 1;
-	bytes d = 2;
+message WriteRes {
+	string reason = 1;
 }
 
 message ListProcReq {

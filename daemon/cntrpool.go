@@ -136,13 +136,12 @@ func (p *cntrPool) StartMeta(id []byte) (*api.Metainfo, error) {
 		}
 
 		cnt := bucket.Get([]byte("busy"))
-		if len(cnt) == 0 {
-			cnt = []byte{1}
-		} else {
-			cnt[0] += 1
+		res := []byte{1}
+		if len(cnt) > 0 {
+			res[0] += cnt[0]
 		}
 
-		if err := bucket.Put([]byte("busy"), cnt); err != nil {
+		if err := bucket.Put([]byte("busy"), res); err != nil {
 			return err
 		}
 

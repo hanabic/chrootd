@@ -66,7 +66,7 @@ func metaFromCli(c *cli.Context) *api.Metainfo {
 					Flags:       defaultMountFlags,
 				},
 				{
-					Source:      "tmpfs",
+					Source:      "devtmpfs",
 					Destination: "/dev",
 					Device:      "tmpfs",
 					Flags:       unix.MS_NOSUID | unix.MS_STRICTATIME,

@@ -59,3 +59,10 @@ func (p *taskPool) Range(f func(key ksuid.KSUID, val *task) bool) {
 		}
 	}
 }
+
+func (p *taskPool) Close() {
+	p.Range(func(key ksuid.KSUID, t *task) bool {
+		t.Destroy()
+		return true
+	})
+}

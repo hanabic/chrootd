@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
@@ -57,13 +56,6 @@ func newTaskServer(u *User, p *cntrPool, t *taskPool) (*taskServer, error) {
 	return &taskServer{user: u, cntrs: p, tasks: t, factory: factory}, nil
 }
 
-func (s *taskServer) Close() {
-	s.tasks.Range(func(key ksuid.KSUID, t *task) bool {
-		t.Destroy()
-		return true
-	})
-}
-
 func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes, error) {
 	s.user.Logger.Info().Msgf("request to start task[%p]", req)
 
@@ -79,7 +71,7 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 		return &api.StartRes{Id: nil, Reason: "can not alloc uid"}, nil
 	}
 
-	cfg := &meta.Config
+	cfg := meta.Config
 
 	// TODO: not all options can be passed from cli
 	// need an permission filter
@@ -108,7 +100,7 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 		cfg.Readonlyfs = true
 	}
 
-	if err := task.Init(s.factory, cfg); err != nil {
+	if err := task.Init(s.factory, &cfg); err != nil {
 		s.tasks.Del(tid)
 		s.user.Logger.Warn().Err(err).Msgf("fail to create task[%p]", req)
 		return &api.StartRes{Id: nil, Reason: "can not alloc resource for container"}, nil
@@ -116,7 +108,7 @@ func (s *taskServer) Start(c context.Context, req *api.StartReq) (*api.StartRes,
 
 	uid, _ := cfg.HostRootUID()
 	gid, _ := cfg.HostRootGID()
-	s.user.Logger.Debug().Msgf("start task[%p]: %v, %v, %v", req, uid, gid, meta)
+	s.user.Logger.Debug().Msgf("start task[%p]: %v, %v, %+v", req, uid, gid, meta)
 	return &api.StartRes{Id: tid.Bytes()}, nil
 }
 
@@ -250,7 +242,6 @@ func (s *taskServer) Exec(ctx context.Context, req *api.ExecReq) (*api.ExecRes, 
 		Cwd:              info.Cwd,
 		ConsoleWidth:     uint16(info.ConsoleWidth),
 		ConsoleHeight:    uint16(info.ConsoleHeight),
-		Init:             task.isInit,
 		// TODO: handle rlimits/caps
 	}
 
@@ -259,111 +250,83 @@ func (s *taskServer) Exec(ctx context.Context, req *api.ExecReq) (*api.ExecRes, 
 		return nil, err
 	}
 
-	if task.isInit {
-		task.isInit = false
-	}
-
 	return &api.ExecRes{Info: infoFromProc(proc)}, nil
 }
 
-func (s *taskServer) IO(srv api.Task_IOServer) error {
-	s.user.Logger.Debug().Msgf("request to io[%p]", srv)
+func (s *taskServer) Read(ctx context.Context, req *api.ReadReq) (*api.ReadRes, error) {
+	s.user.Logger.Debug().Msgf("request to read[%p]: %+v", req, req)
 
-	first, err := srv.Recv()
+	id, err := ksuid.FromBytes(req.Id)
 	if err != nil {
-		return err
-	}
-
-	id, err := ksuid.FromBytes(first.Id)
-	if err != nil {
-		return srv.Send(&api.IORes{Str: "invalid id"})
+		return &api.ReadRes{Reason: "invalid task id"}, nil
 	}
 
 	task := s.tasks.Get(id)
 	if task == nil {
-		return srv.Send(&api.IORes{Str: "no task of such id"})
+		return &api.ReadRes{Reason: "no task of such id"}, nil
 	}
 
-	pid := first.Pid
-	if pid <= 0 {
-		return srv.Send(&api.IORes{Str: "no process of such pid"})
-	}
-
-	var p *process
-
-	task.RangeProc(func(proc *process) bool {
-		if pid == proc.pid {
-			p = proc
-			return false
-		}
-		return true
-	})
-
+	p := task.procs[req.Pid]
 	if p == nil {
-		return srv.Send(&api.IORes{Str: "no process of such pid"})
+		return &api.ReadRes{Reason: "no process of such pid"}, nil
 	}
 
-	err = srv.Send(&api.IORes{Str: "handshaked"})
+	d := make([]byte, 1024)
+	n := 0
+
+	switch req.Type {
+	case "stdout":
+		n, err = p.rstdout.Read(d)
+		if err == io.EOF {
+			p.rstdout.Close()
+		}
+	case "stderr":
+		n, err = p.rstderr.Read(d)
+		if err == io.EOF {
+			p.rstderr.Close()
+		}
+	}
+
+	s.user.Logger.Debug().Msgf("request to read[%p] ---- %d, %s", req, n, err)
 	if err != nil {
-		return err
-	}
-
-	handle := func(file *os.File, cat string, srv api.Task_IOServer) error {
-		buf := make([]byte, 256)
-	loop:
-		for {
-			select {
-			case <-srv.Context().Done():
-				break loop
-			default:
-				n, e := file.Read(buf)
-				if e != nil {
-					if e == io.EOF {
-						break loop
-					}
-					return e
-				}
-
-				e = srv.Send(&api.IORes{
-					Str: cat,
-					D:   buf[:n],
-				})
-				if e != nil {
-					return e
-				}
-			}
+		if err == io.EOF {
+			return &api.ReadRes{Reason: "eof"}, nil
 		}
-		return nil
+		// TODO: log it
+		return &api.ReadRes{Reason: "unknown error"}, nil
 	}
 
-	go handle(p.stdout, "stdout", srv)
-	go handle(p.stderr, "stderr", srv)
+	return &api.ReadRes{D: d[:n]}, nil
+}
 
-	// TODO: should terminate when process is terminated
-loop:
-	for {
-		select {
-		case <-srv.Context().Done():
-			break loop
-		default:
-			pkt, err := srv.Recv()
-			if err != nil {
-				if err == io.EOF {
-					break loop
-				}
-				return err
-			}
+func (s *taskServer) Write(ctx context.Context, req *api.WriteReq) (*api.WriteRes, error) {
+	s.user.Logger.Debug().Msgf("request to write[%p]", req)
 
-			data := pkt.D
-			if data == nil {
-				return srv.Send(&api.IORes{Str: "empty data"})
-			}
+	id, err := ksuid.FromBytes(req.Id)
+	if err != nil {
+		return &api.WriteRes{Reason: "invalid task id"}, nil
+	}
 
-			if _, err := io.Copy(p.stdin, bytes.NewReader(data)); err != nil {
-				return nil
+	task := s.tasks.Get(id)
+	if task == nil {
+		return &api.WriteRes{Reason: "no task of such id"}, nil
+	}
+
+	p := task.procs[req.Pid]
+	if p == nil {
+		return &api.WriteRes{Reason: "no process of such pid"}, nil
+	}
+
+	for k := 0; k < len(req.D); {
+		n, err := p.wstdin.Write(req.D[k:])
+		k += n
+		if err != nil {
+			if err == io.ErrClosedPipe {
+				p.rstdin.Close()
 			}
+			return &api.WriteRes{Reason: "write error"}, nil
 		}
 	}
 
-	return nil
+	return &api.WriteRes{}, nil
 }

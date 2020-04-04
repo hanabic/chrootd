@@ -153,6 +153,7 @@ func main() {
 			defer cntrPool.Close()
 
 			taskPool := newTaskPool()
+			defer taskPool.Close()
 
 			grpcServer := grpc.NewServer(grpc.ConnectionTimeout(user.Timeout))
 
@@ -163,7 +164,6 @@ func main() {
 			if err != nil {
 				return err
 			}
-			defer taskServer.Close()
 			api.RegisterTaskServer(grpcServer, taskServer)
 
 			user.Logger.Info().Msgf("listening server in [%s]%s", user.Network, user.Addr)
@@ -180,9 +180,12 @@ func main() {
 				case sig := <-sigs:
 					if sig == syscall.SIGINT {
 						cntrPool.Close()
+						taskPool.Close()
 						grpcServer.GracefulStop()
 					}
 					break loop
+				case <-c.Context.Done():
+					sigs <- syscall.SIGINT
 				default:
 					time.Sleep(500 * time.Microsecond)
 				}
