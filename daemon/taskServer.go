@@ -186,7 +186,6 @@ func infoFromProc(proc *libcontainer.Process) *api.Proc {
 		Cwd:           proc.Cwd,
 		ConsoleWidth:  uint32(proc.ConsoleWidth),
 		ConsoleHeight: uint32(proc.ConsoleHeight),
-		Init:          proc.Init,
 		// handle rlimits/caps/io
 	}
 
@@ -260,8 +259,8 @@ func (s *taskServer) Exec(ctx context.Context, req *api.ExecReq) (*api.ExecRes, 
 		return nil, err
 	}
 
-	if !task.isInit {
-		task.isInit = true
+	if task.isInit {
+		task.isInit = false
 	}
 
 	return &api.ExecRes{Info: infoFromProc(proc)}, nil

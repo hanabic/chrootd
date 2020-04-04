@@ -31,7 +31,7 @@ type task struct {
 }
 
 func newTask(meta *api.Metainfo) *task {
-	return &task{id: ksuid.Nil, meta: meta, isInit: false}
+	return &task{id: ksuid.Nil, meta: meta, isInit: true}
 }
 
 func (t *task) SetId(id ksuid.KSUID) {
