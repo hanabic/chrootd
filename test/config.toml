@@ -1,0 +1,14 @@
+blkio_weight = 0
+cpu-shares = 10
+cpu-quota = 0
+cpu-period = 0
+cpu_rt_quota = 0
+cpu_rt_period = 0
+cpuset_cpus = ""
+cpuset_mems = ""
+kernel_memory = 0
+memory = 0
+memory_swap = 0
+memory_reservation = 0
+pids_limit = 0
+test = 999
