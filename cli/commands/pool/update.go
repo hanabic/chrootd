@@ -2,9 +2,10 @@ package pool
 
 import (
 	"fmt"
+	"github.com/xhebox/chrootd/cli/options"
 
-	"github.com/urfave/cli/v2"
 	"github.com/segmentio/ksuid"
+	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/api"
 	. "github.com/xhebox/chrootd/cli/types"
 )
@@ -40,7 +41,10 @@ var Update = &cli.Command{
 			return err
 		}
 
-		m := metaFromCli(c)
+		m, err := options.MetaFromCli(c)
+		if err != nil {
+			return fmt.Errorf("fail to make meta: %s", err)
+		}
 
 		cfg, err := m.ToBytes()
 		if err != nil {

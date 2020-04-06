@@ -1,0 +1,25 @@
+[Rootfs]
+rootfs="/"
+
+
+[Cgroups]
+blkio_weight= 10
+cpu_shares= 10
+cpu_quota= 0
+cpu_period= 0
+cpu_rt_quota= 0
+cpu_rt_period= 0
+cpuset_cpus=""
+cpuset_mems=""
+kernel_memory="400m"
+memory="400m"
+memory_swap="800m"
+memory_reservation="400m"
+pids_limit=0
+
+[Capabilities]
+bounding=["aabbb", "CAP_SETGID"]
+effective=["CAP_SETUID", "CAP_SETGID"]
+inheritable=["CAP_SETUID", "CAP_SETGID"]
+permitted=["CAP_SETUID", "CAP_SETGID"]
+ambient=["CAP_SETUID", "CAP_SETGID"]

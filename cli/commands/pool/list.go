@@ -2,13 +2,32 @@ package pool
 
 import (
 	"fmt"
-	"io"
-
+	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/segmentio/ksuid"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/api"
 	. "github.com/xhebox/chrootd/cli/types"
+	"io"
+	"strconv"
 )
+
+func formatResource(r configs.Resources) string {
+
+	s := "memory" + ": " + strconv.FormatInt(r.Memory, 10) + "bytes" + "\n"
+	s = s + "MemoryReservation" + ": " + strconv.FormatInt(r.MemoryReservation, 10) + "bytes" + "\n"
+	s = s + "MemorySwap" + ": " + strconv.FormatInt(r.MemorySwap, 10) + "bytes" + "\n"
+	s = s + "KernelMemory" + ": " + strconv.FormatInt(r.KernelMemory, 10) + "bytes" + "\n"
+	s = s + "KernelMemoryTCP" + ": " + strconv.FormatInt(r.KernelMemoryTCP, 10) + "bytes" + "\n"
+	s = s + "PidsLimit" + ": " + strconv.FormatInt(r.PidsLimit, 10) + "\n"
+	s = s + "CpuRtRuntime" + ": " + strconv.FormatInt(r.CpuRtRuntime, 10) + "us" + "\n"
+	s = s + "CpuRtPeriod" + ": " + strconv.FormatUint(r.CpuRtPeriod, 10) + "us" + "\n"
+	s = s + "CpuPeriod" + ": " + strconv.FormatUint(r.CpuPeriod, 10) + "us" + "\n"
+	s = s + "CpuShares" + ": " + strconv.FormatUint(r.CpuShares, 10) + "us" + "\n"
+	s = s + "CpuWeight" + ": " + strconv.FormatUint(r.CpuWeight, 10) + "us" + "\n"
+	s = s + "CpuShares" + ": " + r.CpusetMems + "us" + "\n"
+	s = s + "CpuWeight" + ": " + r.CpusetCpus + "us" + "\n"
+	return s
+}
 
 var List = &cli.Command{
 	Name:  "list",
@@ -63,7 +82,9 @@ var List = &cli.Command{
 
 			id, _ := ksuid.FromBytes(cntr.Id)
 			config, _ := api.NewMetaFromBytes(cntr.Config)
-			data.Logger.Info().Msgf("container[%s]: %+v", id, config)
+
+			data.Logger.Info().Msgf("container[%s]:\nCgroups\n%v", id, formatResource(*config.Config.Cgroups.Resources))
+
 		}
 
 		return nil

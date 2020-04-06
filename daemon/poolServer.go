@@ -20,7 +20,7 @@ func newPoolServer(u *User, p *cntrPool) *poolServer {
 }
 
 func (s *poolServer) Create(ctx context.Context, req *api.CreateReq) (*api.CreateRes, error) {
-	s.user.Logger.Info().Msgf("request to create container[%p] %v", req, req)
+	s.user.Logger.Info().Msgf("request to create container[%p]\n%v", req, string(req.Config))
 
 	id, err := s.cntrs.Add(req.Config)
 	if err != nil {
@@ -60,8 +60,7 @@ func (s *poolServer) List(req *api.ListReq, srv api.ContainerPool_ListServer) er
 
 	var err error
 
-	var nameGlob, labelGlob, idGlob  glob.Glob
-
+	var nameGlob, labelGlob, idGlob glob.Glob
 
 	s.cntrs.ForEach(func(id []byte, b *bolt.Bucket) error {
 		metadata := b.Get([]byte("metadata"))
