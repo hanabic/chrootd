@@ -1,0 +1,38 @@
+syntax = "proto3";
+package api;
+
+option go_package = ".;api";
+
+service Image {
+	rpc Upload (stream ImageUploadReq) returns (ImageUploadRes);
+	rpc Delete (ImageDeleteReq) returns (ImageDeleteRes);
+	rpc List (ImageListReq) returns (stream ImageListRes);
+}
+
+message ImageUploadReq {
+	oneof pkt {
+		string name = 1;
+		bytes metadataJson = 2;
+		bytes rootfsTarball = 3;
+	}
+}
+
+message ImageUploadRes {
+	string reason = 1;
+}
+
+message ImageDeleteReq {
+	string name = 1;
+}
+
+message ImageDeleteRes {
+	string reason = 1;
+}
+
+message ImageListReq {
+}
+
+message ImageListRes {
+	string name = 1;
+	bytes metadataJson = 2;
+}

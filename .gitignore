@@ -20,3 +20,5 @@
 # log/pid
 *.log
 *.pid
+
+images
