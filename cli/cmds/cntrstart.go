@@ -11,7 +11,7 @@ import (
 
 var Start = &cli.Command{
 	Name:  "start",
-	Usage: "start a task by container metadata",
+	Usage: "start a container metadata",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:     "id",

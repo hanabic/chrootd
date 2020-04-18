@@ -8,20 +8,24 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v2"
-	. "github.com/xhebox/chrootd/cli/commands/pool"
-	. "github.com/xhebox/chrootd/cli/commands/task"
-	. "github.com/xhebox/chrootd/cli/types"
 	"google.golang.org/grpc"
 )
 
+type User struct {
+	Logger zerolog.Logger
+	Conn   *grpc.ClientConn
+}
+
+func emptyFormatter(interface{}) string {
+	return ""
+}
+
 func main() {
 	user := &User{
-		Logger: zerolog.New(os.Stdout).With().Timestamp().Logger(),
+		Logger: zerolog.New(os.Stdout),
 	}
 
-	// TODO: use pkg/errors for wrapping error, instead of fmt.Errorf
 	app := &cli.App{
-		// TODO: add version flag
 		UseShortOptionHandling: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -64,24 +68,38 @@ func main() {
 				Usage: "no color output",
 			},
 		},
-		Commands: []*cli.Command{
-			List,
-			Create,
-			Update,
-			Delete,
-			Start,
-			Stop,
-			ListTask,
-			ListProc,
-			Exec,
+		Commands: cli.Commands{
+			/*
+				Start,
+				Stop,
+				ListTask,
+				ListProc,
+				Exec,
+			*/
+			CntrCreate,
+			CntrUpdate,
+			CntrList,
+			CntrDelete,
+			&cli.Command{
+				Name:  "image",
+				Usage: "image related",
+				Subcommands: []*cli.Command{
+					ImgList,
+					ImgDel,
+					ImgUpload,
+				},
+			},
 		},
 		Before: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
-			if !c.Bool("structLogger") {
+			if c.Bool("structLogger") {
+				user.Logger = user.Logger.With().Timestamp().Logger()
+			} else {
 				user.Logger = user.Logger.Output(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-					w.TimeFormat = time.RFC3339
 					w.NoColor = c.Bool("nocolor")
+					w.FormatTimestamp = emptyFormatter
+					w.FormatLevel = emptyFormatter
 				}))
 			}
 
@@ -111,11 +129,11 @@ func main() {
 			return nil
 		},
 		After: func(c *cli.Context) error {
-			data := c.Context.Value("_data").(*User)
+			user := c.Context.Value("_data").(*User)
 
-			data.Logger.Debug().Msgf("grpc disconnect")
+			user.Logger.Debug().Msgf("grpc disconnect")
 
-			data.Conn.Close()
+			user.Conn.Close()
 
 			return nil
 		},
