@@ -88,6 +88,11 @@ func main() {
 				Name:  "regback",
 				Usage: "specify the backend used by registry",
 			},
+			&cli.StringFlag{
+				Name:  "registry_bucket",
+				Usage: "if registry is backened by bolt, a bucket name is needed",
+				Value: "chrootd",
+			},
 			&cli.DurationFlag{
 				Name:        "timeout",
 				Usage:       "server connection timeout",
@@ -173,7 +178,7 @@ func main() {
 
 			switch c.String("regback") {
 			case "bolt":
-				store, err := libkv.NewStore(store.BOLTDB, c.StringSlice("registry"), &store.Config{})
+				store, err := libkv.NewStore(store.BOLTDB, c.StringSlice("registry"), &store.Config{Bucket: c.String("registry_bucket")})
 				if err != nil {
 					return err
 				}
@@ -208,7 +213,7 @@ func main() {
 
 			srv := server.NewServer()
 
-			states, err := libkv.NewStore(store.BOLTDB, []string{filepath.Join(user.RunPath, "states")}, &store.Config{})
+			states, err := libkv.NewStore(store.BOLTDB, []string{filepath.Join(user.RunPath, "states")}, &store.Config{Bucket: "states"})
 			if err != nil {
 				return err
 			}
