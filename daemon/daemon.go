@@ -14,16 +14,16 @@ import (
 
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
-	"github.com/xhebox/libkv-bolt"
 	"github.com/docker/libkv/store/consul"
-	etcdv3 "github.com/smallnest/libkv-etcdv3-store"
 	"github.com/docker/libkv/store/zookeeper"
 	"github.com/rs/zerolog"
+	etcdv3 "github.com/smallnest/libkv-etcdv3-store"
 	"github.com/smallnest/rpcx/log"
 	"github.com/smallnest/rpcx/server"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/utils"
+	"github.com/xhebox/libkv-bolt"
 )
 
 func init() {
@@ -38,17 +38,22 @@ var (
 )
 
 type User struct {
-	Logger      zerolog.Logger
-	ServiceAddr string
-	AttachAddr  string
-	Timeout     time.Duration
+	Logger zerolog.Logger
+
+	ServiceAddr         string
+	ServicePath         string
+	ServiceReadTimeout  time.Duration
+	ServiceWriteTimeout time.Duration
+	ServiceRootless bool
+	ServiceSecure   bool
+
+	AttachAddr   string
+	AttachLimits int
+
 	ConfPath    string
-	ServicePath string
 	RunPath     string
 	PidFileName string
 	LogFileName string
-	ProcLimits  int
-	Rootless    bool
 }
 
 func main() {
@@ -57,6 +62,7 @@ func main() {
 	}
 
 	app := &cli.App{
+		Usage:                  "chrootd daemon program",
 		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
 		Flags: []cli.Flag{
@@ -68,44 +74,10 @@ func main() {
 				Usage:       "load toml config from `FILE`",
 				Destination: &u.ConfPath,
 			},
-			&cli.StringFlag{
-				Name:        "srvpath",
-				Usage:       "service path",
-				Value:       "cntr",
-				Destination: &u.ServicePath,
-			},
-			&cli.StringFlag{
-				Name:        "addr",
-				Usage:       "for container service listening",
-				Value:       "tcp@:9090",
-				EnvVars:     []string{"CHROOTD_ADDR"},
-				Destination: &u.AttachAddr,
-			},
-			&cli.StringFlag{
-				Name:        "attachAddr",
-				Usage:       "for process attach",
-				Value:       "tcp@:9091",
-				Destination: &u.ServiceAddr,
-			},
-			&cli.StringSliceFlag{
-				Name:  "registry",
-				Usage: "libkv store addr, used for service and container resolution",
-			},
-			&cli.StringFlag{
-				Name:  "regback",
-				Usage: "specify the backend used by registry",
-			},
-			&cli.StringFlag{
-				Name:  "registry_bucket",
-				Usage: "if registry is backened by bolt, a bucket name is needed",
-				Value: "chrootd",
-			},
-			&cli.DurationFlag{
-				Name:        "timeout",
-				Usage:       "server connection timeout",
-				Value:       10 * time.Second,
-				EnvVars:     []string{"CHROOTD_TIMEOUT"},
-				Destination: &u.Timeout,
+			&cli.BoolFlag{
+				Name:  "daemon",
+				Value: false,
+				Usage: "start in background",
 			},
 			&cli.PathFlag{
 				Name:        "pid",
@@ -115,7 +87,7 @@ func main() {
 				Destination: &u.PidFileName,
 			},
 			&cli.PathFlag{
-				Name:        "runpath",
+				Name:        "run",
 				Value:       "/var/lib/chrootd",
 				EnvVars:     []string{"CHROOTD_RUNPATH"},
 				Usage:       "daemon run path",
@@ -128,26 +100,74 @@ func main() {
 				Usage:       "daemon log path",
 				Destination: &u.LogFileName,
 			},
-			&cli.BoolFlag{
-				Name:        "rootless",
-				Usage:       "if runs in rootless mode",
-				Value:       true,
-				Destination: &u.Rootless,
-			},
 			&cli.StringFlag{
 				Name:  "loglevel",
 				Value: "info",
 				Usage: "set log level: debug, info, warn, error",
 			},
-			&cli.IntFlag{
-				Name:  "proclimits",
-				Value: 64,
-				Usage: "maximum attachable proccess limits",
+			&cli.StringSliceFlag{
+				Name:  "registry",
+				Usage: "libkv store addr, used for service and container resolution",
+			},
+			&cli.StringFlag{
+				Name:  "registry_backend",
+				Usage: "specify the backend used by registry",
+			},
+			&cli.StringFlag{
+				Name:  "registry_bucket",
+				Usage: "if registry is backened by bolt, a bucket name is needed",
+				Value: "chrootd",
+			},
+			&cli.StringFlag{
+				Name:        "service_path",
+				Usage:       "service path used by rpcx",
+				Value:       "cntr",
+				Destination: &u.ServicePath,
+			},
+			&cli.StringFlag{
+				Name:        "service_addr",
+				Usage:       "for container service listening",
+				Value:       "tcp@:9090",
+				EnvVars:     []string{"CHROOTD_ADDR"},
+				Destination: &u.AttachAddr,
+			},
+			&cli.DurationFlag{
+				Name:        "service_readtimeout",
+				Usage:       "server read timeout",
+				Value:       3 * time.Second,
+				EnvVars:     []string{"CHROOTD_READTIMEOUT"},
+				Destination: &u.ServiceReadTimeout,
+			},
+			&cli.DurationFlag{
+				Name:        "service_writetimeout",
+				Usage:       "server write timeout",
+				Value:       3 * time.Second,
+				EnvVars:     []string{"CHROOTD_WRITETIMEOUT"},
+				Destination: &u.ServiceWriteTimeout,
 			},
 			&cli.BoolFlag{
-				Name:  "daemon",
-				Value: false,
-				Usage: "start in background",
+				Name:        "service_rootless",
+				Usage:       "service will run in rootless mode",
+				Value:       true,
+				Destination: &u.ServiceRootless,
+			},
+			&cli.BoolFlag{
+				Name:        "service_secure",
+				Usage:       "container will have a safe/default configuration, KNOW WHAT YOU ARE DOING WHEN DISABLING IT",
+				Value:       true,
+				Destination: &u.ServiceSecure,
+			},
+			&cli.IntFlag{
+				Name:        "attach_limits",
+				Value:       64,
+				Usage:       "maximum attachable proccess limits",
+				Destination: &u.AttachLimits,
+			},
+			&cli.StringFlag{
+				Name:        "attach_addr",
+				Usage:       "for process attach",
+				Value:       "tcp@:9091",
+				Destination: &u.AttachAddr,
 			},
 		},
 		Before: utils.NewTomlFlagLoader("config"),
@@ -159,7 +179,7 @@ func main() {
 			}
 
 			if !filepath.IsAbs(user.RunPath) {
-				return errors.New("runpath should be absolute")
+				return errors.New("run should be absolute")
 			}
 
 			if err := os.MkdirAll(user.RunPath, 0755); err != nil {
@@ -183,33 +203,12 @@ func main() {
 
 			var registry cntr.Registry
 
-			switch c.String("regback") {
-			case "bolt":
-				store, err := libkv.NewStore(store.BOLTDB, c.StringSlice("registry"), &store.Config{Bucket: c.String("registry_bucket")})
-				if err != nil {
-					return err
-				}
-				defer store.Close()
-
-				registry = cntr.NewStoreRegistry(store)
-			case "consul":
-				store, err := libkv.NewStore(store.CONSUL, c.StringSlice("registry"), &store.Config{})
-				if err != nil {
-					return err
-				}
-				defer store.Close()
-
-				registry = cntr.NewStoreRegistry(store)
-			case "etcdv3":
-				store, err := libkv.NewStore(store.ETCD, c.StringSlice("registry"), &store.Config{})
-				if err != nil {
-					return err
-				}
-				defer store.Close()
-
-				registry = cntr.NewStoreRegistry(store)
-			case "zk":
-				store, err := libkv.NewStore(store.ZK, c.StringSlice("registry"), &store.Config{})
+			if backend := c.String("registry_backend"); len(backend) > 0 {
+				store, err := libkv.NewStore(
+					store.Backend(backend),
+					c.StringSlice("registry"),
+					&store.Config{Bucket: c.String("registry_bucket")},
+				)
 				if err != nil {
 					return err
 				}
@@ -217,8 +216,6 @@ func main() {
 
 				registry = cntr.NewStoreRegistry(store)
 			}
-
-			srv := server.NewServer()
 
 			states, err := libkv.NewStore(store.BOLTDB, []string{filepath.Join(user.RunPath, "states")}, &store.Config{Bucket: "states"})
 			if err != nil {
@@ -230,18 +227,29 @@ func main() {
 				user.ServiceAddr,
 				user.AttachAddr,
 				states,
-				registry)
+				registry, func(s *cntr.Server) error {
+					s.ProcLimits = user.AttachLimits
+					s.Rootless = user.ServiceRootless
+					s.Context = c.Context
+					s.Secure = user.ServiceSecure
+					return nil
+				})
 			if err != nil {
 				return err
 			}
 			defer cntrServer.Close()
+
+			srv := server.NewServer(
+				server.WithReadTimeout(user.ServiceReadTimeout),
+				server.WithWriteTimeout(user.ServiceWriteTimeout),
+			)
 
 			err = cntrServer.Register(srv, user.ServicePath)
 			if err != nil {
 				return err
 			}
 
-			user.Logger.Log().Msgf("rpcx server started at %s", user.ServiceAddr)
+			user.Logger.Log().Msgf("container service server started at %s", user.ServiceAddr)
 			user.Logger.Log().Msgf("attach server started at %s", user.AttachAddr)
 
 			go func() {
