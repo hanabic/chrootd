@@ -14,9 +14,9 @@ import (
 
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
-	"github.com/docker/libkv/store/boltdb"
+	"github.com/xhebox/libkv-bolt"
 	"github.com/docker/libkv/store/consul"
-	"github.com/docker/libkv/store/etcd"
+	etcdv3 "github.com/smallnest/libkv-etcdv3-store"
 	"github.com/docker/libkv/store/zookeeper"
 	"github.com/rs/zerolog"
 	"github.com/smallnest/rpcx/log"
@@ -28,7 +28,7 @@ import (
 
 func init() {
 	boltdb.Register()
-	etcd.Register()
+	etcdv3.Register()
 	consul.Register()
 	zookeeper.Register()
 }
@@ -39,7 +39,8 @@ var (
 
 type User struct {
 	Logger      zerolog.Logger
-	Addr        string
+	ServiceAddr string
+	AttachAddr  string
 	Timeout     time.Duration
 	ConfPath    string
 	ServicePath string
@@ -78,7 +79,13 @@ func main() {
 				Usage:       "for container service listening",
 				Value:       "tcp@:9090",
 				EnvVars:     []string{"CHROOTD_ADDR"},
-				Destination: &u.Addr,
+				Destination: &u.AttachAddr,
+			},
+			&cli.StringFlag{
+				Name:        "attachAddr",
+				Usage:       "for process attach",
+				Value:       "tcp@:9091",
+				Destination: &u.ServiceAddr,
 			},
 			&cli.StringSliceFlag{
 				Name:  "registry",
@@ -193,7 +200,7 @@ func main() {
 				defer store.Close()
 
 				registry = cntr.NewStoreRegistry(store)
-			case "etcd":
+			case "etcdv3":
 				store, err := libkv.NewStore(store.ETCD, c.StringSlice("registry"), &store.Config{})
 				if err != nil {
 					return err
@@ -220,7 +227,8 @@ func main() {
 			defer states.Close()
 
 			cntrServer, err := cntr.NewServer(filepath.Join(user.RunPath, "cntrs"),
-				"127.0.0.1:9091",
+				user.ServiceAddr,
+				user.AttachAddr,
 				states,
 				registry)
 			if err != nil {
@@ -233,7 +241,8 @@ func main() {
 				return err
 			}
 
-			user.Logger.Log().Msgf("rpcx server started at %s", user.Addr)
+			user.Logger.Log().Msgf("rpcx server started at %s", user.ServiceAddr)
+			user.Logger.Log().Msgf("attach server started at %s", user.AttachAddr)
 
 			go func() {
 				h := make(chan os.Signal, 1)
@@ -243,14 +252,15 @@ func main() {
 				case syscall.SIGKILL:
 					srv.Close()
 				default:
-					srv.Shutdown(c.Context)
+					srv.Shutdown(context.Background())
 				}
 			}()
 
 			go func() {
 				lis := net.ListenConfig{}
 
-				listener, err := lis.Listen(c.Context, "tcp", ":9091")
+				ua := utils.NewAddrFromString(user.AttachAddr)
+				listener, err := lis.Listen(c.Context, ua.Network(), ua.Addr())
 				if err != nil {
 					return
 				}
@@ -266,7 +276,7 @@ func main() {
 				}
 			}()
 
-			ua := utils.NewAddrFromString(user.Addr)
+			ua := utils.NewAddrFromString(user.ServiceAddr)
 			return srv.Serve(ua.Network(), ua.Addr())
 		},
 	}

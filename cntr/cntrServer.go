@@ -20,7 +20,6 @@ import (
 	"github.com/ryanuber/go-glob"
 	"github.com/segmentio/ksuid"
 	"github.com/smallnest/rpcx/server"
-	"github.com/xhebox/chrootd/utils"
 )
 
 func init() {
@@ -50,7 +49,7 @@ func (pty *Attach) Close() {
 
 type Server struct {
 	registered bool
-	addr       string
+	serviceAddr       string
 	attachAddr string
 	cntrPath   string
 	registry   Registry
@@ -69,12 +68,13 @@ type Server struct {
 
 type Opt func(*Server) error
 
-func NewServer(cntrPath string, attachAddr string, states store.Store, registry Registry, opts ...Opt) (*Server, error) {
+func NewServer(cntrPath string, serviceAddr string, attachAddr string, states store.Store, registry Registry, opts ...Opt) (*Server, error) {
 	res := &Server{
 		registered: false,
 		cntrPath:   cntrPath,
 		registry:   registry,
 		store:      states,
+		serviceAddr:       serviceAddr,
 		attachAddr: attachAddr,
 		procs:      make(map[string]*Attach),
 		ProcLimits: 64,
@@ -123,11 +123,7 @@ func NewServer(cntrPath string, attachAddr string, states store.Store, registry 
 		return nil, err
 	}
 
-	ok, err := res.store.Exists("id")
-	if err != nil {
-		return nil, err
-	}
-
+	ok, _ := res.store.Exists("id")
 	if !ok {
 		err = res.store.Put("id", []byte(ksuid.New().String()), &store.WriteOptions{})
 		if err != nil {
@@ -145,8 +141,6 @@ func (s *Server) Register(rpcx *server.Server, servicePath string) error {
 		return fmt.Errorf("registered")
 	}
 	s.registered = true
-
-	s.addr = utils.NewAddr(rpcx.Address().Network(), rpcx.Address().String()).String()
 
 	// metadata related rpc
 	err = rpcx.RegisterFunctionName(servicePath, "List", s.List, "")
@@ -206,7 +200,7 @@ func (s *Server) Register(rpcx *server.Server, servicePath string) error {
 			return err
 		}
 
-		err = s.registry.Put(string(kvs.Value), []byte(s.addr))
+		err = s.registry.Put(string(kvs.Value), []byte(s.serviceAddr))
 		if err != nil {
 			return err
 		}
@@ -362,7 +356,7 @@ func (s *Server) List(ctx context.Context, req *ListReq, res *ListRes) error {
 		if r {
 			res.CntrIds = append(res.CntrIds, ListCntr{
 				Id:   cntr.Key,
-				Addr: s.addr,
+				Addr: s.serviceAddr,
 			})
 		}
 	}
@@ -653,7 +647,13 @@ func (s *Server) Close() error {
 	}
 
 	for _, cntr := range cntrs {
-		err = s.stop(cntr.Key)
+		if cntr.Key == "id" {
+			continue
+		}
+		e := s.stop(cntr.Key)
+		if e != nil {
+			err = e
+		}
 	}
 
 	return err
