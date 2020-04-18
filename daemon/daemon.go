@@ -7,17 +7,31 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"github.com/docker/libkv"
+	"github.com/docker/libkv/store"
+	"github.com/docker/libkv/store/boltdb"
+	"github.com/docker/libkv/store/consul"
+	"github.com/docker/libkv/store/etcd"
+	"github.com/docker/libkv/store/zookeeper"
 	"github.com/rs/zerolog"
+	"github.com/smallnest/rpcx/log"
+	"github.com/smallnest/rpcx/server"
 	"github.com/urfave/cli/v2"
-	"github.com/urfave/cli/v2/altsrc"
-	"github.com/xhebox/chrootd/api"
-	"google.golang.org/grpc"
+	"github.com/xhebox/chrootd/cntr"
+	"github.com/xhebox/chrootd/utils"
 )
+
+func init() {
+	boltdb.Register()
+	etcd.Register()
+	consul.Register()
+	zookeeper.Register()
+}
 
 var (
 	ErrDaemonStart = errors.New("daemon start")
@@ -25,89 +39,106 @@ var (
 
 type User struct {
 	Logger      zerolog.Logger
-	Network     string
 	Addr        string
 	Timeout     time.Duration
 	ConfPath    string
+	ServicePath string
 	RunPath     string
-	CntrPath    string
 	PidFileName string
-	PidFilePerm os.FileMode
 	LogFileName string
-	LogFilePerm os.FileMode
+	ProcLimits  int
+	Rootless    bool
 }
 
 func main() {
-	user := &User{
+	u := &User{
 		Logger: zerolog.New(os.Stdout).With().Timestamp().Logger(),
 	}
 
-	flags := []cli.Flag{
-		&cli.StringFlag{
-			Name:    "config",
-			Aliases: []string{"c"},
-			Value:   "/etc/chrootd/conf",
-			EnvVars: []string{"CHROOTD_CONFIG"},
-			Usage:   "load toml config from `FILE`",
-		},
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "addr",
-			Usage:   "server connection addr",
-			Value:   "127.0.0.1:9090",
-			EnvVars: []string{"CHROOTD_CONNADDR"},
-		}),
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "network",
-			Usage:   "server connection network type",
-			Value:   "tcp",
-			EnvVars: []string{"CHROOTD_CONNTYPE"},
-		}),
-		altsrc.NewDurationFlag(&cli.DurationFlag{
-			Name:    "timeout",
-			Usage:   "server connection timeout",
-			Value:   10 * time.Second,
-			EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
-		}),
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "pid",
-			Value:   "chrootd.pid",
-			EnvVars: []string{"CHROOTD_PIDFILE"},
-			Usage:   "daemon pid path",
-		}),
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "runpath",
-			Value:   "/var/run/container",
-			EnvVars: []string{"CHROOTD_RUNPATH"},
-			Usage:   "daemon run path",
-		}),
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "cntrpath",
-			Usage:   "container persistence storage path",
-			Value:   "/etc/chrootd/containers",
-			EnvVars: []string{"CHROOTD_CNTRPATH"},
-		}),
-		altsrc.NewStringFlag(&cli.StringFlag{
-			Name:    "log",
-			Value:   "chrootd.log",
-			EnvVars: []string{"CHROOTD_LOGFILE"},
-			Usage:   "daemon log path",
-		}),
-		altsrc.NewIntFlag(&cli.IntFlag{
-			Name:  "loglevel",
-			Value: 1,
-			Usage: "set log level\n0 - debug\n1 - info\n2 - warn\n3 - error",
-		}),
-		altsrc.NewBoolFlag(&cli.BoolFlag{
-			Name:  "daemon",
-			Value: false,
-			Usage: "start in background",
-		}),
-	}
-
 	app := &cli.App{
+		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
-		Flags:                  flags,
-		Before:                 altsrc.InitInputSourceWithContext(flags, altsrc.NewTomlSourceFromFlagFunc("config")),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "config",
+				Aliases:     []string{"c"},
+				Value:       "/etc/chrootd/conf",
+				EnvVars:     []string{"CHROOTD_CONFIG"},
+				Usage:       "load toml config from `FILE`",
+				Destination: &u.ConfPath,
+			},
+			&cli.StringFlag{
+				Name:        "srvpath",
+				Usage:       "service path",
+				Value:       "cntr",
+				Destination: &u.ServicePath,
+			},
+			&cli.StringFlag{
+				Name:        "addr",
+				Usage:       "for container service listening",
+				Value:       "tcp@:9090",
+				EnvVars:     []string{"CHROOTD_ADDR"},
+				Destination: &u.Addr,
+			},
+			&cli.StringSliceFlag{
+				Name:  "registry",
+				Usage: "libkv store addr, used for service and container resolution",
+			},
+			&cli.StringFlag{
+				Name:  "regback",
+				Usage: "specify the backend used by registry",
+			},
+			&cli.DurationFlag{
+				Name:        "timeout",
+				Usage:       "server connection timeout",
+				Value:       10 * time.Second,
+				EnvVars:     []string{"CHROOTD_TIMEOUT"},
+				Destination: &u.Timeout,
+			},
+			&cli.PathFlag{
+				Name:        "pid",
+				Value:       "chrootd.pid",
+				EnvVars:     []string{"CHROOTD_PIDFILE"},
+				Usage:       "daemon pid path",
+				Destination: &u.PidFileName,
+			},
+			&cli.PathFlag{
+				Name:        "runpath",
+				Value:       "/var/lib/chrootd",
+				EnvVars:     []string{"CHROOTD_RUNPATH"},
+				Usage:       "daemon run path",
+				Destination: &u.RunPath,
+			},
+			&cli.PathFlag{
+				Name:        "log",
+				Value:       "chrootd.log",
+				EnvVars:     []string{"CHROOTD_LOGFILE"},
+				Usage:       "daemon log path",
+				Destination: &u.LogFileName,
+			},
+			&cli.BoolFlag{
+				Name:        "rootless",
+				Usage:       "if runs in rootless mode",
+				Value:       true,
+				Destination: &u.Rootless,
+			},
+			&cli.StringFlag{
+				Name:  "loglevel",
+				Value: "info",
+				Usage: "set log level: debug, info, warn, error",
+			},
+			&cli.IntFlag{
+				Name:  "proclimits",
+				Value: 64,
+				Usage: "maximum attachable proccess limits",
+			},
+			&cli.BoolFlag{
+				Name:  "daemon",
+				Value: false,
+				Usage: "start in background",
+			},
+		},
+		Before: utils.NewTomlFlagLoader("config"),
 		Action: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
@@ -115,87 +146,127 @@ func main() {
 				return ErrDaemonStart
 			}
 
-			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+			if !filepath.IsAbs(user.RunPath) {
+				return errors.New("runpath should be absolute")
+			}
 
-			user.ConfPath = c.String("config")
-			user.Timeout = c.Duration("timeout")
-			user.PidFileName = c.String("pid")
-			user.LogFileName = c.String("log")
-			user.Network = c.String("network")
-			user.Addr = c.String("addr")
-			user.RunPath = c.String("runpath")
-			user.CntrPath = c.String("cntrpath")
+			if err := os.MkdirAll(user.RunPath, 0755); err != nil {
+				return err
+			}
 
-			switch c.Int("loglevel") {
-			case 0:
+			switch c.String("loglevel") {
+			case "debug":
 				user.Logger = user.Logger.Level(zerolog.DebugLevel)
-			case 1:
+			case "info":
 				user.Logger = user.Logger.Level(zerolog.InfoLevel)
-			case 2:
+			case "warn":
 				user.Logger = user.Logger.Level(zerolog.WarnLevel)
-			case 3:
+			case "error":
 				user.Logger = user.Logger.Level(zerolog.ErrorLevel)
 			}
 
 			user.Logger.Log().Msgf("daemon started, logleve - %s", user.Logger.GetLevel())
 
-			lis, err := net.Listen(user.Network, user.Addr)
+			log.SetLogger(utils.NewRpcxLogger(user.Logger))
+
+			var registry cntr.Registry
+
+			switch c.String("regback") {
+			case "bolt":
+				store, err := libkv.NewStore(store.BOLTDB, c.StringSlice("registry"), &store.Config{})
+				if err != nil {
+					return err
+				}
+				defer store.Close()
+
+				registry = cntr.NewStoreRegistry(store)
+			case "consul":
+				store, err := libkv.NewStore(store.CONSUL, c.StringSlice("registry"), &store.Config{})
+				if err != nil {
+					return err
+				}
+				defer store.Close()
+
+				registry = cntr.NewStoreRegistry(store)
+			case "etcd":
+				store, err := libkv.NewStore(store.ETCD, c.StringSlice("registry"), &store.Config{})
+				if err != nil {
+					return err
+				}
+				defer store.Close()
+
+				registry = cntr.NewStoreRegistry(store)
+			case "zk":
+				store, err := libkv.NewStore(store.ZK, c.StringSlice("registry"), &store.Config{})
+				if err != nil {
+					return err
+				}
+				defer store.Close()
+
+				registry = cntr.NewStoreRegistry(store)
+			}
+
+			srv := server.NewServer()
+
+			states, err := libkv.NewStore(store.BOLTDB, []string{filepath.Join(user.RunPath, "states")}, &store.Config{})
 			if err != nil {
 				return err
 			}
-			defer lis.Close()
+			defer states.Close()
 
-			cntrPool, err := newCntrPool(user.CntrPath)
+			cntrServer, err := cntr.NewServer(filepath.Join(user.RunPath, "cntrs"),
+				"127.0.0.1:9091",
+				states,
+				registry)
 			if err != nil {
 				return err
 			}
-			defer cntrPool.Close()
+			defer cntrServer.Close()
 
-			taskPool := newTaskPool()
-			defer taskPool.Close()
-
-			grpcServer := grpc.NewServer(grpc.ConnectionTimeout(user.Timeout))
-
-			poolServer := newPoolServer(user, cntrPool)
-			api.RegisterContainerPoolServer(grpcServer, poolServer)
-
-			taskServer, err := newTaskServer(user, cntrPool, taskPool)
+			err = cntrServer.Register(srv, user.ServicePath)
 			if err != nil {
 				return err
 			}
-			api.RegisterTaskServer(grpcServer, taskServer)
 
-			user.Logger.Info().Msgf("listening server in [%s]%s", user.Network, user.Addr)
+			user.Logger.Log().Msgf("rpcx server started at %s", user.Addr)
+
 			go func() {
-				if err := grpcServer.Serve(lis); err != nil {
-					sigs <- syscall.SIGINT
-					user.Logger.Error().Err(err).Msg("fail to serve")
+				h := make(chan os.Signal, 1)
+				signal.Notify(h, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+				s := <-h
+				switch s {
+				case syscall.SIGKILL:
+					srv.Close()
+				default:
+					srv.Shutdown(c.Context)
 				}
 			}()
 
-		loop:
-			for {
-				select {
-				case sig := <-sigs:
-					if sig == syscall.SIGINT {
-						cntrPool.Close()
-						taskPool.Close()
-						grpcServer.GracefulStop()
-					}
-					break loop
-				case <-c.Context.Done():
-					sigs <- syscall.SIGINT
-				default:
-					time.Sleep(500 * time.Microsecond)
-				}
-			}
+			go func() {
+				lis := net.ListenConfig{}
 
-			return nil
+				listener, err := lis.Listen(c.Context, "tcp", ":9091")
+				if err != nil {
+					return
+				}
+				defer listener.Close()
+
+				for {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+
+					go cntrServer.ServeAttach(c.Context, conn)
+				}
+			}()
+
+			ua := utils.NewAddrFromString(user.Addr)
+			return srv.Serve(ua.Network(), ua.Addr())
 		},
 	}
 
-	ctx := context.WithValue(context.Background(), "_data", user)
+	ctx := context.WithValue(context.Background(), "_data", u)
 
 	err := app.RunContext(ctx, os.Args)
 	if err == ErrDaemonStart {
@@ -214,6 +285,6 @@ func main() {
 		cmd := exec.Command(os.Args[0], args...)
 		cmd.Start()
 	} else if err != nil {
-		user.Logger.Fatal().Msg(err.Error())
+		u.Logger.Fatal().Msg(err.Error())
 	}
 }
