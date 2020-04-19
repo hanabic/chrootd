@@ -129,7 +129,7 @@ func main() {
 				Usage:       "`address` to listen container service",
 				Value:       "tcp@:9090",
 				EnvVars:     []string{"CHROOTD_ADDR"},
-				Destination: &u.AttachAddr,
+				Destination: &u.ServiceAddr,
 			},
 			&cli.DurationFlag{
 				Name:        "service_readtimeout",
