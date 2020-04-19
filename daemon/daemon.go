@@ -44,8 +44,8 @@ type User struct {
 	ServicePath         string
 	ServiceReadTimeout  time.Duration
 	ServiceWriteTimeout time.Duration
-	ServiceRootless bool
-	ServiceSecure   bool
+	ServiceRootless     bool
+	ServiceSecure       bool
 
 	AttachAddr   string
 	AttachLimits int
@@ -53,19 +53,18 @@ type User struct {
 	ConfPath    string
 	RunPath     string
 	PidFileName string
-	LogFileName string
 }
 
 func main() {
 	u := &User{
-		Logger: zerolog.New(os.Stdout).With().Timestamp().Logger(),
+		Logger: zerolog.New(os.Stdout),
 	}
 
 	app := &cli.App{
 		Usage:                  "chrootd daemon program",
 		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
-		Flags: []cli.Flag{
+		Flags: append([]cli.Flag{
 			&cli.StringFlag{
 				Name:        "config",
 				Aliases:     []string{"c"},
@@ -92,18 +91,6 @@ func main() {
 				EnvVars:     []string{"CHROOTD_RUNPATH"},
 				Usage:       "daemon `RUNPATH` for states/persistence",
 				Destination: &u.RunPath,
-			},
-			&cli.PathFlag{
-				Name:        "log",
-				Value:       "chrootd.log",
-				EnvVars:     []string{"CHROOTD_LOGFILE"},
-				Usage:       "daemon `LOGFILE` path",
-				Destination: &u.LogFileName,
-			},
-			&cli.StringFlag{
-				Name:  "loglevel",
-				Value: "info",
-				Usage: "set `loglevel`: debug, info, warn, error",
 			},
 			&cli.StringSliceFlag{
 				Name:  "registry",
@@ -169,7 +156,7 @@ func main() {
 				Value:       "tcp@:9091",
 				Destination: &u.AttachAddr,
 			},
-		},
+		}, utils.ZerologFlags...),
 		Before: utils.NewTomlFlagLoader("config"),
 		Action: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
@@ -182,22 +169,17 @@ func main() {
 				return errors.New("run should be absolute")
 			}
 
-			if err := os.MkdirAll(user.RunPath, 0755); err != nil {
+			err := os.MkdirAll(user.RunPath, 0755)
+			if err != nil {
 				return err
 			}
 
-			switch c.String("loglevel") {
-			case "debug":
-				user.Logger = user.Logger.Level(zerolog.DebugLevel)
-			case "info":
-				user.Logger = user.Logger.Level(zerolog.InfoLevel)
-			case "warn":
-				user.Logger = user.Logger.Level(zerolog.WarnLevel)
-			case "error":
-				user.Logger = user.Logger.Level(zerolog.ErrorLevel)
+			user.Logger, err = utils.NewLogger(c, user.Logger)
+			if err != nil {
+				return err
 			}
 
-			user.Logger.Log().Msgf("daemon started, logleve - %s", user.Logger.GetLevel())
+			user.Logger.Info().Msgf("daemon started, logleve - %s", user.Logger.GetLevel())
 
 			log.SetLogger(utils.NewRpcxLogger(user.Logger))
 
@@ -249,8 +231,8 @@ func main() {
 				return err
 			}
 
-			user.Logger.Log().Msgf("container service server started at %s", user.ServiceAddr)
-			user.Logger.Log().Msgf("attach server started at %s", user.AttachAddr)
+			user.Logger.Info().Msgf("container service server started at %s", user.ServiceAddr)
+			user.Logger.Info().Msgf("attach server started at %s", user.AttachAddr)
 
 			go func() {
 				h := make(chan os.Signal, 1)
