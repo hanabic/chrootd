@@ -14,23 +14,18 @@ import (
 
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
-	"github.com/docker/libkv/store/consul"
-	"github.com/docker/libkv/store/zookeeper"
 	"github.com/rs/zerolog"
-	etcdv3 "github.com/smallnest/libkv-etcdv3-store"
 	"github.com/smallnest/rpcx/log"
 	"github.com/smallnest/rpcx/server"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/cntr"
+	"github.com/xhebox/chrootd/registry"
 	"github.com/xhebox/chrootd/utils"
 	"github.com/xhebox/libkv-bolt"
 )
 
 func init() {
 	boltdb.Register()
-	etcdv3.Register()
-	consul.Register()
-	zookeeper.Register()
 }
 
 var (
@@ -64,7 +59,7 @@ func main() {
 		Usage:                  "chrootd daemon program",
 		EnableBashCompletion:   true,
 		UseShortOptionHandling: true,
-		Flags: append([]cli.Flag{
+		Flags: utils.ConcatMultipleFlags([]cli.Flag{
 			&cli.StringFlag{
 				Name:        "config",
 				Aliases:     []string{"c"},
@@ -92,71 +87,62 @@ func main() {
 				Usage:       "daemon `RUNPATH` for states/persistence",
 				Destination: &u.RunPath,
 			},
-			&cli.StringSliceFlag{
-				Name:  "registry",
-				Usage: "libkv store `addr`, used for service and container resolution",
-			},
-			&cli.StringFlag{
-				Name:  "registry_backend",
-				Usage: "specify the `backend` used by registry, boltdb/zk/consul/etcdv3",
-			},
-			&cli.StringFlag{
-				Name:  "registry_bucket",
-				Usage: "if registry is backened by bolt, a `bucket` name is needed",
-				Value: "chrootd",
-			},
-			&cli.StringFlag{
-				Name:        "service_path",
-				Usage:       "`service` path used by rpcx",
-				Value:       "cntr",
-				Destination: &u.ServicePath,
-			},
-			&cli.StringFlag{
-				Name:        "service_addr",
-				Usage:       "`address` to listen container service",
-				Value:       "tcp@:9090",
-				EnvVars:     []string{"CHROOTD_ADDR"},
-				Destination: &u.ServiceAddr,
-			},
-			&cli.DurationFlag{
-				Name:        "service_readtimeout",
-				Usage:       "server read `timeout`",
-				Value:       3 * time.Second,
-				EnvVars:     []string{"CHROOTD_READTIMEOUT"},
-				Destination: &u.ServiceReadTimeout,
-			},
-			&cli.DurationFlag{
-				Name:        "service_writetimeout",
-				Usage:       "server write `timeout`",
-				Value:       3 * time.Second,
-				EnvVars:     []string{"CHROOTD_WRITETIMEOUT"},
-				Destination: &u.ServiceWriteTimeout,
-			},
-			&cli.BoolFlag{
-				Name:        "service_rootless",
-				Usage:       "service will run in rootless mode",
-				Value:       true,
-				Destination: &u.ServiceRootless,
-			},
-			&cli.BoolFlag{
-				Name:        "service_secure",
-				Usage:       "container will have a safe/default configuration, KNOW WHAT YOU ARE DOING WHEN DISABLING IT",
-				Value:       true,
-				Destination: &u.ServiceSecure,
-			},
-			&cli.IntFlag{
-				Name:        "attach_limits",
-				Value:       64,
-				Usage:       "maximum attachable proccess limits",
-				Destination: &u.AttachLimits,
-			},
-			&cli.StringFlag{
-				Name:        "attach_addr",
-				Usage:       "`address` for process attach",
-				Value:       "tcp@:9091",
-				Destination: &u.AttachAddr,
-			},
-		}, utils.ZerologFlags...),
+		},
+			utils.ZerologFlags,
+			registry.RegistryFlags,
+			[]cli.Flag{
+				&cli.StringFlag{
+					Name:        "service_path",
+					Usage:       "`service` path used by rpcx",
+					Value:       "cntr",
+					Destination: &u.ServicePath,
+				},
+				&cli.StringFlag{
+					Name:        "service_addr",
+					Usage:       "`address` to listen container service",
+					Value:       "tcp@:9090",
+					EnvVars:     []string{"CHROOTD_ADDR"},
+					Destination: &u.ServiceAddr,
+				},
+				&cli.DurationFlag{
+					Name:        "service_readtimeout",
+					Usage:       "server read `timeout`",
+					Value:       3 * time.Second,
+					EnvVars:     []string{"CHROOTD_READTIMEOUT"},
+					Destination: &u.ServiceReadTimeout,
+				},
+				&cli.DurationFlag{
+					Name:        "service_writetimeout",
+					Usage:       "server write `timeout`",
+					Value:       3 * time.Second,
+					EnvVars:     []string{"CHROOTD_WRITETIMEOUT"},
+					Destination: &u.ServiceWriteTimeout,
+				},
+				&cli.BoolFlag{
+					Name:        "service_rootless",
+					Usage:       "service will run in rootless mode",
+					Value:       true,
+					Destination: &u.ServiceRootless,
+				},
+				&cli.BoolFlag{
+					Name:        "service_secure",
+					Usage:       "container will have a safe/default configuration, KNOW WHAT YOU ARE DOING WHEN DISABLING IT",
+					Value:       true,
+					Destination: &u.ServiceSecure,
+				},
+				&cli.IntFlag{
+					Name:        "attach_limits",
+					Value:       64,
+					Usage:       "maximum attachable proccess limits",
+					Destination: &u.AttachLimits,
+				},
+				&cli.StringFlag{
+					Name:        "attach_addr",
+					Usage:       "`address` for process attach",
+					Value:       "tcp@:9091",
+					Destination: &u.AttachAddr,
+				},
+			}),
 		Before: utils.NewTomlFlagLoader("config"),
 		Action: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
@@ -183,20 +169,11 @@ func main() {
 
 			log.SetLogger(utils.NewRpcxLogger(user.Logger))
 
-			var registry cntr.Registry
-
-			if backend := c.String("registry_backend"); len(backend) > 0 {
-				store, err := libkv.NewStore(
-					store.Backend(backend),
-					c.StringSlice("registry"),
-					&store.Config{Bucket: c.String("registry_bucket")},
-				)
-				if err != nil {
-					return err
-				}
-				defer store.Close()
-
-				registry = cntr.NewStoreRegistry(store)
+			reg, err := registry.NewRegistryFromCli(c)
+			if err == nil {
+				defer reg.Close()
+			} else {
+				user.Logger.Err(err).Msgf("fail to start registry")
 			}
 
 			states, err := libkv.NewStore(store.BOLTDB, []string{filepath.Join(user.RunPath, "states")}, &store.Config{Bucket: "states"})
@@ -209,7 +186,8 @@ func main() {
 				user.ServiceAddr,
 				user.AttachAddr,
 				states,
-				registry, func(s *cntr.Server) error {
+				registry.NewWrapRegistry("service", reg),
+				func(s *cntr.Server) error {
 					s.ProcLimits = user.AttachLimits
 					s.Rootless = user.ServiceRootless
 					s.Context = c.Context

@@ -17,7 +17,7 @@ var (
 			Name:   "container",
 			Parent: "system",
 			Resources: &configs.Resources{
-				AllowedDevices:   configs.DefaultAllowedDevices,
+				AllowedDevices: configs.DefaultAllowedDevices,
 			},
 		},
 		Namespaces: configs.Namespaces{
@@ -54,6 +54,7 @@ var (
 )
 
 type Metainfo struct {
+	Name          string                `json:"name"`
 	Rootfs        string                `json:"rootfs"`
 	Hostname      string                `json:"hostname"`
 	Readonlyfs    bool                  `json:"readonlyfs"`
@@ -124,6 +125,11 @@ func (m Metainfo) ToBytes() ([]byte, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+func (m Metainfo) String() string {
+	strb, _ := json.MarshalIndent(m, "", "\t")
+	return string(strb)
 }
 
 func (m Metainfo) ToConfig() configs.Config {

@@ -5,23 +5,24 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xhebox/chrootd/utils"
 	"github.com/smallnest/rpcx/client"
+	"github.com/xhebox/chrootd/registry"
+	"github.com/xhebox/chrootd/utils"
 )
 
 type Client struct {
 	servicePath string
-	singlePeer string
+	singlePeer  string
 	option      client.Option
 
-	cntrs    Registry
-	services Discovery
+	cntrs    registry.Registry
+	services registry.Discovery
 
 	cachedClient   map[string]*client.Client
 	cachedClientMu sync.Mutex
 }
 
-func NewClient(servicePath string, srv Discovery, cntrs Registry, option client.Option) (*Client, error) {
+func NewClient(servicePath string, srv registry.Discovery, cntrs registry.Registry, option client.Option) (*Client, error) {
 	r := &Client{
 		servicePath:  servicePath,
 		services:     srv,
@@ -33,7 +34,7 @@ func NewClient(servicePath string, srv Discovery, cntrs Registry, option client.
 		return nil, fmt.Errorf("nil service discovery")
 	}
 	switch k := srv.(type) {
-	case *PeerDiscovery:
+	case *registry.PeerDiscovery:
 		r.singlePeer = k.Addr()
 	default:
 		if cntrs == nil {
@@ -68,8 +69,11 @@ func (c *Client) getCachedClient(addr string) (*client.Client, error) {
 
 func (c *Client) getClient(id string) (*client.Client, error) {
 	if len(c.singlePeer) != 0 {
-		_srv, _ := c.services.List()
-		return c.getCachedClient(string(_srv[0].Value))
+		return c.getCachedClient(c.singlePeer)
+	}
+
+	if c.cntrs == nil {
+		return nil, fmt.Errorf("need a registry for container resolution")
 	}
 
 	cntr, err := c.cntrs.Get(id)
@@ -108,9 +112,11 @@ func (c *Client) List(ctx context.Context, req *ListReq, res *ListRes) error {
 	}
 
 	for _, cntr := range res.CntrIds {
-		err = c.cntrs.Put(cntr.Id, []byte(cntr.Addr))
-		if err != nil {
-			return err
+		if c.cntrs != nil {
+			err = c.cntrs.Put(cntr.Id, []byte(cntr.Addr))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -124,14 +130,16 @@ func (c *Client) Create(ctx context.Context, req *CreateReq, res *CreateRes) (e 
 	}
 
 	for _, srv := range srvs {
-		cli, err := c.getCachedClient(string(srv.Key))
+		cli, err := c.getCachedClient(string(srv.Value))
 		if err != nil {
 			return err
 		}
 
 		e = cli.Call(ctx, c.servicePath, "Create", req, res)
 		if e == nil {
-			e = c.cntrs.Put(res.Id, []byte(srv.Key))
+			if c.cntrs != nil {
+				e = c.cntrs.Put(res.Id, []byte(srv.Value))
+			}
 			return
 		}
 	}
@@ -164,9 +172,11 @@ func (c *Client) Delete(ctx context.Context, req *DeleteReq, res *DeleteRes) err
 		return err
 	}
 
-	err = c.cntrs.Delete(req.Id)
-	if err != nil {
-		return err
+	if c.cntrs != nil {
+		err = c.cntrs.Delete(req.Id)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

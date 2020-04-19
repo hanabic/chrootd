@@ -20,6 +20,7 @@ import (
 	"github.com/ryanuber/go-glob"
 	"github.com/segmentio/ksuid"
 	"github.com/smallnest/rpcx/server"
+	"github.com/xhebox/chrootd/registry"
 )
 
 func init() {
@@ -48,13 +49,13 @@ func (pty *Attach) Close() {
 }
 
 type Server struct {
-	registered bool
-	serviceAddr       string
-	attachAddr string
-	cntrPath   string
-	registry   Registry
-	factory    libcontainer.Factory
-	store      store.Store
+	registered  bool
+	serviceAddr string
+	attachAddr  string
+	cntrPath    string
+	registry    registry.Registry
+	factory     libcontainer.Factory
+	states      store.Store
 
 	procs   map[string]*Attach
 	procsMu sync.Mutex
@@ -68,19 +69,19 @@ type Server struct {
 
 type Opt func(*Server) error
 
-func NewServer(cntrPath string, serviceAddr string, attachAddr string, states store.Store, registry Registry, opts ...Opt) (*Server, error) {
+func NewServer(cntrPath string, serviceAddr string, attachAddr string, states store.Store, registry registry.Registry, opts ...Opt) (*Server, error) {
 	res := &Server{
-		registered: false,
-		cntrPath:   cntrPath,
-		registry:   registry,
-		store:      states,
-		serviceAddr:       serviceAddr,
-		attachAddr: attachAddr,
-		procs:      make(map[string]*Attach),
-		ProcLimits: 64,
-		Rootless:   true,
-		Secure:     true,
-		Context:    context.Background(),
+		registered:  false,
+		cntrPath:    cntrPath,
+		registry:    registry,
+		states:      states,
+		serviceAddr: serviceAddr,
+		attachAddr:  attachAddr,
+		procs:       make(map[string]*Attach),
+		ProcLimits:  64,
+		Rootless:    true,
+		Secure:      true,
+		Context:     context.Background(),
 	}
 
 	for _, f := range opts {
@@ -123,9 +124,9 @@ func NewServer(cntrPath string, serviceAddr string, attachAddr string, states st
 		return nil, err
 	}
 
-	ok, _ := res.store.Exists("id")
+	ok, _ := res.states.Exists("id")
 	if !ok {
-		err = res.store.Put("id", []byte(ksuid.New().String()), &store.WriteOptions{})
+		err = res.states.Put("id", []byte(ksuid.New().String()), &store.WriteOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +196,7 @@ func (s *Server) Register(rpcx *server.Server, servicePath string) error {
 	}
 
 	if s.registry != nil {
-		kvs, err := s.store.Get("id")
+		kvs, err := s.states.Get("id")
 		if err != nil {
 			return err
 		}
@@ -236,7 +237,7 @@ func (s *Server) Create(ctx context.Context, req *CreateReq, res *CreateRes) (er
 		return err
 	}
 
-	ok, _, err := s.store.AtomicPut(id, mbytes, nil, &store.WriteOptions{})
+	ok, _, err := s.states.AtomicPut(id, mbytes, nil, &store.WriteOptions{})
 	if !ok {
 		return err
 	}
@@ -257,7 +258,7 @@ type ConfigRes struct {
 }
 
 func (s *Server) Config(ctx context.Context, req *ConfigReq, res *ConfigRes) error {
-	kvs, err := s.store.Get(req.Id)
+	kvs, err := s.states.Get(req.Id)
 	if err != nil {
 		return err
 	}
@@ -277,7 +278,7 @@ func (s *Server) Config(ctx context.Context, req *ConfigReq, res *ConfigRes) err
 		return err
 	}
 
-	ok, _, err := s.store.AtomicPut(req.Id, mbytes, kvs, &store.WriteOptions{})
+	ok, _, err := s.states.AtomicPut(req.Id, mbytes, kvs, &store.WriteOptions{})
 	if !ok {
 		return err
 	}
@@ -303,7 +304,7 @@ func (s *Server) Delete(ctx context.Context, req *DeleteReq, res *DeleteRes) err
 		}
 	}
 
-	err = s.store.DeleteTree(req.Id)
+	err = s.states.DeleteTree(req.Id)
 	if err != nil {
 		return fmt.Errorf("container not exist")
 	}
@@ -330,7 +331,7 @@ type ListRes struct {
 }
 
 func (s *Server) List(ctx context.Context, req *ListReq, res *ListRes) error {
-	cntrs, err := s.store.List("")
+	cntrs, err := s.states.List("")
 	if err != nil {
 		return err
 	}
@@ -441,7 +442,7 @@ func (s *Server) Start(ctx context.Context, req *StartReq, res *StartRes) error 
 			return err
 		}
 
-		m, err := s.store.Get(req.Id)
+		m, err := s.states.Get(req.Id)
 		if err != nil {
 			return err
 		}
@@ -641,7 +642,7 @@ func (s *Server) Status(ctx context.Context, req *StatusReq, res *StatusRes) err
 func (s *Server) Close() error {
 	var err error
 
-	cntrs, err := s.store.List("")
+	cntrs, err := s.states.List("")
 	if err != nil {
 		return err
 	}

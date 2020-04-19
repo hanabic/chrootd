@@ -2,128 +2,105 @@ package main
 
 import (
 	"context"
-	"net"
 	"os"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v2"
-	"google.golang.org/grpc"
+	"github.com/xhebox/chrootd/registry"
+	"github.com/xhebox/chrootd/utils"
 )
 
 type User struct {
 	Logger zerolog.Logger
-	Conn   *grpc.ClientConn
-}
 
-func emptyFormatter(interface{}) string {
-	return ""
+	ServicePath         string
+	ServiceReadTimeout  time.Duration
+	ServiceWriteTimeout time.Duration
+
+	Discovery registry.Discovery
+	Registry  registry.Registry
 }
 
 func main() {
-	user := &User{
+	u := &User{
 		Logger: zerolog.New(os.Stdout),
 	}
 
 	app := &cli.App{
 		UseShortOptionHandling: true,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "addr",
-				Usage:   "server connection addr",
-				Value:   "127.0.0.1:9090",
-				EnvVars: []string{"CHROOTD_CONNADDR"},
-			},
-			&cli.StringFlag{
-				Name:    "network",
-				Usage:   "server connection network type",
-				Value:   "tcp",
-				EnvVars: []string{"CHROOTD_CONNTYPE"},
-			},
-			&cli.DurationFlag{
-				Name:    "timeout",
-				Usage:   "server connection timeout",
-				Value:   30 * time.Second,
-				EnvVars: []string{"CHROOTD_CONNTIMEOUT"},
-			},
-			&cli.BoolFlag{
-				Name:    "verbose",
-				Value:   false,
-				Aliases: []string{"v"},
-			},
-			&cli.BoolFlag{
-				Name:    "quite",
-				Value:   false,
-				Aliases: []string{"q"},
-			},
-			&cli.BoolFlag{
-				Name:    "structLogger",
-				Value:   false,
-				Aliases: []string{"s"},
-				Usage:   "output structed log",
-			},
-			&cli.BoolFlag{
-				Name:  "nocolor",
-				Value: false,
-				Usage: "no color output",
-			},
-		},
-		Commands: cli.Commands{
-			/*
-				Start,
-				Stop,
-				ListTask,
-				ListProc,
-				Exec,
-			*/
-			CntrCreate,
-			CntrUpdate,
-			CntrList,
-			CntrDelete,
-			&cli.Command{
-				Name:  "image",
-				Usage: "image related",
-				Subcommands: []*cli.Command{
-					ImgList,
-					ImgDel,
-					ImgUpload,
+		Flags: utils.ConcatMultipleFlags(utils.ZerologFlags,
+			registry.RegistryFlags,
+			[]cli.Flag{
+				&cli.StringFlag{
+					Name:        "service_path",
+					Usage:       "`service` path used by rpcx",
+					Value:       "cntr",
+					Destination: &u.ServicePath,
 				},
-			},
+				&cli.StringSliceFlag{
+					Name:        "service_addr",
+					Usage:       "non-empty value means no service discovery; if more than one address(cluser), a registry is needed for container discovery",
+					Value:       cli.NewStringSlice("tcp@:9090"),
+					//Destination: &u.ServiceAddrs,
+				},
+				&cli.DurationFlag{
+					Name:        "service_readtimeout",
+					Usage:       "server read `timeout`",
+					Value:       3 * time.Second,
+					Destination: &u.ServiceReadTimeout,
+				},
+				&cli.DurationFlag{
+					Name:        "service_writetimeout",
+					Usage:       "server write `timeout`",
+					Value:       3 * time.Second,
+					Destination: &u.ServiceWriteTimeout,
+				},
+			}),
+		Commands: cli.Commands{
+			CntrCreate,
+			/*
+				CntrUpdate,
+				CntrList,
+				CntrDelete,
+				&cli.Command{
+					Name:  "image",
+					Usage: "image related",
+					Subcommands: []*cli.Command{
+						ImgList,
+						ImgDel,
+						ImgUpload,
+					},
+				},
+			*/
 		},
 		Before: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
-			if c.Bool("structLogger") {
-				user.Logger = user.Logger.With().Timestamp().Logger()
-			} else {
-				user.Logger = user.Logger.Output(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
-					w.NoColor = c.Bool("nocolor")
-					w.FormatTimestamp = emptyFormatter
-					w.FormatLevel = emptyFormatter
-				}))
-			}
-
-			if c.Bool("verbose") {
-				user.Logger = user.Logger.Level(zerolog.DebugLevel)
-			} else if c.Bool("quite") {
-				user.Logger = user.Logger.Level(zerolog.WarnLevel)
-			} else {
-				user.Logger = user.Logger.Level(zerolog.InfoLevel)
-			}
-
-			addr := c.String("addr")
-			network := c.String("network")
-			timeout := c.Duration("timeout")
-
-			user.Logger.Debug().Msgf("grpc connect to [%s]%s -- %s", network, addr, timeout)
-
 			var err error
-			user.Conn, err = grpc.Dial("new", grpc.WithInsecure(), grpc.WithTimeout(timeout), grpc.WithContextDialer(func(ctx context.Context, target string) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, network, addr)
-			}))
+			user.Logger, err = utils.NewLogger(c, user.Logger)
 			if err != nil {
 				return err
+			}
+
+			addrs := c.StringSlice("service_addr")
+			if len(addrs) == 1 {
+				user.Discovery = registry.NewPeer(addrs[0])
+			} else {
+				user.Registry, err = registry.NewRegistryFromCli(c)
+				if err != nil {
+					return err
+				}
+
+				if len(addrs) < 1 {
+					user.Discovery = registry.NewWrapRegistry("cntrs", user.Registry)
+					user.Registry = registry.NewWrapRegistry("service", user.Registry)
+				} else {
+					user.Discovery, err = registry.NewMultiple(addrs...)
+					if err != nil {
+						return err
+					}
+				}
 			}
 
 			return nil
@@ -131,17 +108,17 @@ func main() {
 		After: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)
 
-			user.Logger.Debug().Msgf("grpc disconnect")
-
-			user.Conn.Close()
+			if user.Registry != nil {
+				user.Registry.Close()
+			}
 
 			return nil
 		},
 	}
 
-	ctx := context.WithValue(context.Background(), "_data", user)
+	ctx := context.WithValue(context.Background(), "_data", u)
 
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		user.Logger.Fatal().Msg(err.Error())
+		u.Logger.Fatal().Msg(err.Error())
 	}
 }

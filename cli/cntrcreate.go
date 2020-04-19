@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-
 	"github.com/pkg/errors"
+	"github.com/smallnest/rpcx/client"
+	"github.com/smallnest/rpcx/protocol"
 	"github.com/urfave/cli/v2"
-	"github.com/xhebox/chrootd/api"
+	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/utils"
 )
 
@@ -31,35 +30,34 @@ var CntrCreate = &cli.Command{
 		}),
 	Before: utils.NewTomlFlagLoader("config"),
 	Action: func(c *cli.Context) error {
-		data := c.Context.Value("_data").(*User)
+		user := c.Context.Value("_data").(*User)
 
-		client := api.NewContainerClient(data.Conn)
+		n, err := cntr.NewClient(user.ServicePath,
+			user.Discovery,
+			user.Registry,
+			client.Option{
+				ReadTimeout:   user.ServiceReadTimeout,
+				WriteTimeout:  user.ServiceWriteTimeout,
+				SerializeType: protocol.MsgPack,
+			})
+		if err != nil {
+			return err
+		}
 
 		m, err := MetaFromCli(c)
 		if err != nil {
 			return errors.Wrapf(err, "fail to make meta")
 		}
 
-		cfg, err := m.ToBytes()
+		res := &cntr.CreateRes{}
+		err = n.Create(c.Context, &cntr.CreateReq{
+			Meta: m,
+		}, res)
 		if err != nil {
 			return errors.Wrapf(err, "fail to create")
 		}
 
-		res, err := client.Create(c.Context, &api.CntrCreateReq{
-			Id:     "",
-			Config: cfg,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "fail to create")
-		}
-
-		out := bytes.NewBufferString("")
-
-		if err := json.Indent(out, res.Config, " ", "\t"); err != nil {
-			return errors.Wrapf(err, "fail to marshal indent")
-		}
-
-		data.Logger.Info().Msgf("created container[%s]:\n%s", res.Id, out.String())
+		user.Logger.Info().Msgf("created container[%s]:\n%s", res.Id, res.Meta)
 
 		return nil
 	},

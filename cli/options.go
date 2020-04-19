@@ -4,17 +4,17 @@ import (
 	"github.com/docker/go-units"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/urfave/cli/v2"
-	"github.com/xhebox/chrootd/api"
+	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/utils"
 	"golang.org/x/sys/unix"
 )
 
-func MetaFromCli(c *cli.Context) (*api.Metainfo, error) {
+func MetaFromCli(c *cli.Context) (cntr.Metainfo, error) {
 	defaultMountFlags := unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
 
-	return &api.Metainfo{
+	return cntr.Metainfo{
 		Name:  c.String("name"),
-		Image: c.String("image"),
+		Rootfs: c.String("rootfs"),
 		Capabilities: &configs.Capabilities{
 			Bounding:    c.StringSlice("capabilities.bounding"),
 			Effective:   c.StringSlice("capabilities.effective"),
@@ -202,5 +202,5 @@ var (
 		},
 	}
 
-	flags = append(capFlags, cgroupFlags...)
+	flags = utils.ConcatMultipleFlags(capFlags, cgroupFlags)
 )
