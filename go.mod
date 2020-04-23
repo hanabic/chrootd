@@ -9,6 +9,7 @@ require (
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/containerd/console v1.0.0 // indirect
 	github.com/cornelk/hashmap v1.0.1 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/go-units v0.4.0
 	github.com/docker/libkv v0.2.1
 	github.com/etcd-io/etcd v3.3.20+incompatible // indirect
@@ -32,6 +33,7 @@ require (
 	github.com/xhebox/libkv v0.2.1 // indirect
 	github.com/xhebox/libkv-bolt v0.0.0-20200418115446-d20436404098
 	golang.org/x/net v0.0.0-20200222125558-5a598a2470a0
+	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20200217220822-9197077df867
 	google.golang.org/grpc v1.26.0
 )

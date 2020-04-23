@@ -2,13 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/smallnest/rpcx/client"
+	"github.com/smallnest/rpcx/protocol"
+	"github.com/smallnest/rpcx/share"
 	"github.com/urfave/cli/v2"
+	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/registry"
 	"github.com/xhebox/chrootd/utils"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 type User struct {
@@ -20,6 +26,8 @@ type User struct {
 
 	Discovery registry.Discovery
 	Registry  registry.Registry
+
+	Client *cntr.Client
 }
 
 func main() {
@@ -33,15 +41,27 @@ func main() {
 			registry.RegistryFlags,
 			[]cli.Flag{
 				&cli.StringFlag{
+					Name:  "oauth_id",
+					Usage: "application id",
+				},
+				&cli.StringFlag{
+					Name:  "oauth_secret",
+					Usage: "application secret",
+				},
+				&cli.StringFlag{
+					Name:  "oauth_tokenurl",
+					Usage: "enable permission control if this option is given",
+				},
+				&cli.StringFlag{
 					Name:        "service_path",
 					Usage:       "`service` path used by rpcx",
 					Value:       "cntr",
 					Destination: &u.ServicePath,
 				},
 				&cli.StringSliceFlag{
-					Name:        "service_addr",
-					Usage:       "non-empty value means no service discovery; if more than one address(cluser), a registry is needed for container discovery",
-					Value:       cli.NewStringSlice("tcp@:9090"),
+					Name:  "service_addr",
+					Usage: "non-empty value means no service discovery; if more than one address(cluser), a registry is needed for container discovery",
+					Value: cli.NewStringSlice("tcp@:9090"),
 					//Destination: &u.ServiceAddrs,
 				},
 				&cli.DurationFlag{
@@ -59,10 +79,10 @@ func main() {
 			}),
 		Commands: cli.Commands{
 			CntrCreate,
+			CntrList,
+			CntrDelete,
 			/*
 				CntrUpdate,
-				CntrList,
-				CntrDelete,
 				&cli.Command{
 					Name:  "image",
 					Usage: "image related",
@@ -103,6 +123,41 @@ func main() {
 				}
 			}
 
+			user.Client, err = cntr.NewClient(user.ServicePath,
+				user.Discovery,
+				user.Registry,
+				client.Option{
+					ReadTimeout:   user.ServiceReadTimeout,
+					WriteTimeout:  user.ServiceWriteTimeout,
+					SerializeType: protocol.MsgPack,
+				})
+			if err != nil {
+				return err
+			}
+
+			if c.IsSet("oauth_tokenurl") {
+				cfg := &clientcredentials.Config{
+					ClientID:     c.String("oauth_id"),
+					ClientSecret: c.String("oauth_secret"),
+					TokenURL:     c.String("oauth_tokenurl"),
+					Scopes:       []string{"chrootd"},
+				}
+
+				tok, err := cfg.Token(c.Context)
+				if err != nil {
+					return err
+				}
+
+				str, err := json.Marshal(tok)
+				if err != nil {
+					return err
+				}
+
+				c.Context = context.WithValue(c.Context, share.ReqMetaDataKey, map[string]string{
+					share.AuthKey: string(str),
+				})
+			}
+
 			return nil
 		},
 		After: func(c *cli.Context) error {
@@ -111,6 +166,8 @@ func main() {
 			if user.Registry != nil {
 				user.Registry.Close()
 			}
+
+			user.Client.Close()
 
 			return nil
 		},

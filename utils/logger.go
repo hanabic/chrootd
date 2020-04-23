@@ -1,11 +1,26 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v2"
+)
+
+const (
+	colorBlack = iota + 30
+	colorRed
+	colorGreen
+	colorYellow
+	colorBlue
+	colorMagenta
+	colorCyan
+	colorWhite
+
+	colorBold     = 1
+	colorDarkGray = 90
 )
 
 var (
@@ -35,6 +50,13 @@ var (
 
 func emptyFormatter(interface{}) string {
 	return ""
+}
+
+func colorize(s interface{}, c int, disabled bool) string {
+	if disabled {
+		return fmt.Sprintf("%s", s)
+	}
+	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", c, s)
 }
 
 func NewLogger(c *cli.Context, l zerolog.Logger) (r zerolog.Logger, err error) {
@@ -67,9 +89,40 @@ func NewLogger(c *cli.Context, l zerolog.Logger) (r zerolog.Logger, err error) {
 		r = r.With().Timestamp().Logger()
 	} else {
 		r = r.Output(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+			noColor := c.Bool("log_nocolor")
+
 			w.Out = f
-			w.NoColor = c.Bool("log_nocolor")
+			w.NoColor = noColor
 			w.FormatTimestamp = emptyFormatter
+			w.FormatLevel = func(level interface{}) string {
+				ll, ok := level.(string)
+				if !ok {
+					if level == nil {
+						return ""
+					} else {
+						return fmt.Sprint(level)
+					}
+				}
+
+				switch ll {
+				case "trace":
+					return colorize("TRC", colorMagenta, noColor)
+				case "debug":
+					return colorize("DBG", colorYellow, noColor)
+				case "info":
+					return colorize("INF", colorGreen, noColor)
+				case "warn":
+					return colorize("WRN", colorRed, noColor)
+				case "error":
+					return colorize(colorize("ERR", colorRed, noColor), colorBold, noColor)
+				case "fatal":
+					return colorize(colorize("FTL", colorRed, noColor), colorBold, noColor)
+				case "panic":
+					return colorize(colorize("PNC", colorRed, noColor), colorBold, noColor)
+				default:
+					return colorize("???", colorBold, noColor)
+				}
+			}
 		}))
 	}
 

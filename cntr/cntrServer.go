@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -17,9 +18,11 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"github.com/pkg/errors"
 	"github.com/ryanuber/go-glob"
 	"github.com/segmentio/ksuid"
 	"github.com/smallnest/rpcx/server"
+	"github.com/smallnest/rpcx/serverplugin"
 	"github.com/xhebox/chrootd/registry"
 )
 
@@ -53,6 +56,7 @@ type Server struct {
 	serviceAddr string
 	attachAddr  string
 	cntrPath    string
+	imagePath   string
 	registry    registry.Registry
 	factory     libcontainer.Factory
 	states      store.Store
@@ -337,6 +341,10 @@ func (s *Server) List(ctx context.Context, req *ListReq, res *ListRes) error {
 	}
 
 	for _, cntr := range cntrs {
+		if s.isState(cntr.Key) {
+			continue
+		}
+
 		meta, err := NewMetaFromBytes(cntr.Value)
 		if err != nil {
 			return err
@@ -453,6 +461,14 @@ func (s *Server) Start(ctx context.Context, req *StartReq, res *StartRes) error 
 		}
 
 		cfg := meta.ToConfig()
+
+		switch {
+		case strings.HasPrefix(cfg.Rootfs, "docker://"):
+		case strings.HasPrefix(cfg.Rootfs, "https://"), strings.HasPrefix(cfg.Rootfs, "http://"):
+		case strings.HasPrefix(cfg.Rootfs, "/"):
+		default:
+			return errors.New("unsupported rootfs option")
+		}
 
 		cfg.RootlessEUID = s.Rootless
 		cfg.RootlessCgroups = s.Rootless
@@ -639,6 +655,28 @@ func (s *Server) Status(ctx context.Context, req *StatusReq, res *StatusRes) err
 	return nil
 }
 
+func (s *Server) SaveImage(conn net.Conn, args *serverplugin.FileTransferArgs) {
+	path := filepath.Join(s.imagePath, args.FileName)
+
+	var fd *os.File
+	var err error
+
+	fd, err = os.OpenFile(path, os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer func() {
+		fd.Close()
+		if err != nil {
+			os.Remove(path)
+		}
+	}()
+
+	io.Copy(fd, conn)
+
+	return
+}
+
 func (s *Server) Close() error {
 	var err error
 
@@ -648,9 +686,10 @@ func (s *Server) Close() error {
 	}
 
 	for _, cntr := range cntrs {
-		if cntr.Key == "id" {
+		if s.isState(cntr.Key) {
 			continue
 		}
+
 		e := s.stop(cntr.Key)
 		if e != nil {
 			err = e
@@ -658,4 +697,12 @@ func (s *Server) Close() error {
 	}
 
 	return err
+}
+
+func (s *Server) isState(i string) bool {
+	if i == "id" {
+		return true
+	}
+
+	return false
 }

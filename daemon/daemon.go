@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,9 +15,12 @@ import (
 
 	"github.com/docker/libkv"
 	"github.com/docker/libkv/store"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/smallnest/rpcx/log"
+	"github.com/smallnest/rpcx/protocol"
 	"github.com/smallnest/rpcx/server"
+	"github.com/smallnest/rpcx/serverplugin"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/registry"
@@ -35,6 +39,8 @@ var (
 type User struct {
 	Logger zerolog.Logger
 
+	OAuthURL string
+
 	ServiceAddr         string
 	ServicePath         string
 	ServiceReadTimeout  time.Duration
@@ -45,9 +51,10 @@ type User struct {
 	AttachAddr   string
 	AttachLimits int
 
-	ConfPath    string
-	RunPath     string
-	PidFileName string
+	ImageAddr string
+
+	ConfPath string
+	RunPath  string
 }
 
 func main() {
@@ -74,13 +81,6 @@ func main() {
 				Usage: "start in background",
 			},
 			&cli.PathFlag{
-				Name:        "pid",
-				Value:       "chrootd.pid",
-				EnvVars:     []string{"CHROOTD_PIDFILE"},
-				Usage:       "daemon `PIDFILE` path",
-				Destination: &u.PidFileName,
-			},
-			&cli.PathFlag{
 				Name:        "run",
 				Value:       "/var/lib/chrootd",
 				EnvVars:     []string{"CHROOTD_RUNPATH"},
@@ -91,6 +91,11 @@ func main() {
 			utils.ZerologFlags,
 			registry.RegistryFlags,
 			[]cli.Flag{
+				&cli.StringFlag{
+					Name:        "oauth_validate",
+					Usage:       "a validation url to verify the token passed by clients, will enable permission control",
+					Destination: &u.OAuthURL,
+				},
 				&cli.StringFlag{
 					Name:        "service_path",
 					Usage:       "`service` path used by rpcx",
@@ -141,6 +146,12 @@ func main() {
 					Usage:       "`address` for process attach",
 					Value:       "tcp@:9091",
 					Destination: &u.AttachAddr,
+				},
+				&cli.StringFlag{
+					Name:        "image_addr",
+					Usage:       "`address` for image uploading",
+					Value:       "tcp@:9092",
+					Destination: &u.ImageAddr,
 				},
 			}),
 		Before: utils.NewTomlFlagLoader("config"),
@@ -199,10 +210,27 @@ func main() {
 			}
 			defer cntrServer.Close()
 
+			imageServer := serverplugin.NewFileTransfer(user.ImageAddr, cntrServer.SaveImage, nil, 1000)
+
 			srv := server.NewServer(
 				server.WithReadTimeout(user.ServiceReadTimeout),
 				server.WithWriteTimeout(user.ServiceWriteTimeout),
 			)
+			serverplugin.RegisterFileTransfer(srv, imageServer)
+
+			if c.IsSet("oauth_validate") {
+				srv.AuthFunc = func(ctx context.Context, req *protocol.Message, token string) error {
+					resp, err := http.Get(fmt.Sprintf("%s?token=%s&method=%s", user.OAuthURL, token, req.ServiceMethod))
+					if err != nil {
+						return err
+					}
+					defer resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						return errors.New("permission denied")
+					}
+					return nil
+				}
+			}
 
 			err = cntrServer.Register(srv, user.ServicePath)
 			if err != nil {
@@ -210,7 +238,8 @@ func main() {
 			}
 
 			user.Logger.Info().Msgf("container service server started at %s", user.ServiceAddr)
-			user.Logger.Info().Msgf("attach server started at %s", user.AttachAddr)
+			user.Logger.Info().Msgf("process attach server started at %s", user.AttachAddr)
+			user.Logger.Info().Msgf("image uploading server started at %s", user.ImageAddr)
 
 			go func() {
 				h := make(chan os.Signal, 1)
@@ -245,7 +274,11 @@ func main() {
 			}()
 
 			ua := utils.NewAddrFromString(user.ServiceAddr)
-			return srv.Serve(ua.Network(), ua.Addr())
+			err = srv.Serve(ua.Network(), ua.Addr())
+			if err == server.ErrServerClosed {
+				return nil
+			}
+			return err
 		},
 	}
 

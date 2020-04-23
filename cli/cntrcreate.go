@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/pkg/errors"
-	"github.com/smallnest/rpcx/client"
-	"github.com/smallnest/rpcx/protocol"
 	"github.com/urfave/cli/v2"
 	"github.com/xhebox/chrootd/cntr"
 	"github.com/xhebox/chrootd/utils"
@@ -12,37 +10,22 @@ import (
 var CntrCreate = &cli.Command{
 	Name:  "create",
 	Usage: "create a container",
-	Flags: append(flags,
-		&cli.StringFlag{
-			Name:  "name",
-			Value: "hello",
-			Usage: "containere name",
-		},
-		&cli.StringFlag{
-			Name:     "image",
-			Usage:    "image name",
-			Required: true,
-		},
-		&cli.StringFlag{
-			Name:  "config",
-			Value: "./base.toml",
-			Usage: "base config",
+	Flags: utils.ConcatMultipleFlags(flags,
+		[]cli.Flag{
+			&cli.StringFlag{
+				Name:  "name",
+				Value: "hello",
+				Usage: "containere name",
+			},
+			&cli.StringFlag{
+				Name:     "image",
+				Usage:    "image name",
+				Required: true,
+			},
 		}),
 	Before: utils.NewTomlFlagLoader("config"),
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)
-
-		n, err := cntr.NewClient(user.ServicePath,
-			user.Discovery,
-			user.Registry,
-			client.Option{
-				ReadTimeout:   user.ServiceReadTimeout,
-				WriteTimeout:  user.ServiceWriteTimeout,
-				SerializeType: protocol.MsgPack,
-			})
-		if err != nil {
-			return err
-		}
 
 		m, err := MetaFromCli(c)
 		if err != nil {
@@ -50,7 +33,7 @@ var CntrCreate = &cli.Command{
 		}
 
 		res := &cntr.CreateRes{}
-		err = n.Create(c.Context, &cntr.CreateReq{
+		err = user.Client.Create(c.Context, &cntr.CreateReq{
 			Meta: m,
 		}, res)
 		if err != nil {

@@ -161,19 +161,23 @@ func (c *Client) Config(ctx context.Context, req *ConfigReq, res *ConfigRes) err
 	return nil
 }
 
-func (c *Client) Delete(ctx context.Context, req *DeleteReq, res *DeleteRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Delete(ctx context.Context, id string) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Delete", req, res)
+	res := &DeleteRes{}
+
+	err = cli.Call(ctx, c.servicePath, "Delete", &DeleteReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
 
 	if c.cntrs != nil {
-		err = c.cntrs.Delete(req.Id)
+		err = c.cntrs.Delete(id)
 		if err != nil {
 			return err
 		}
@@ -182,13 +186,17 @@ func (c *Client) Delete(ctx context.Context, req *DeleteReq, res *DeleteRes) err
 	return nil
 }
 
-func (c *Client) Exec(ctx context.Context, req *ExecReq, res *ExecRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Exec(ctx context.Context, id string) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Exec", req, res)
+	res := &ExecRes{}
+
+	err = cli.Call(ctx, c.servicePath, "Exec", &ExecReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
@@ -196,13 +204,17 @@ func (c *Client) Exec(ctx context.Context, req *ExecReq, res *ExecRes) error {
 	return nil
 }
 
-func (c *Client) Pause(ctx context.Context, req *PauseReq, res *PauseRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Pause(ctx context.Context, id string) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Pause", req, res)
+	res := &PauseRes{}
+
+	err = cli.Call(ctx, c.servicePath, "Pause", &PauseReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
@@ -210,13 +222,17 @@ func (c *Client) Pause(ctx context.Context, req *PauseReq, res *PauseRes) error 
 	return nil
 }
 
-func (c *Client) Resume(ctx context.Context, req *ResumeReq, res *ResumeRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Resume(ctx context.Context, id string) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Resume", req, res)
+	res := &ResumeRes{}
+
+	err = cli.Call(ctx, c.servicePath, "Resume", &ResumeReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
@@ -238,13 +254,17 @@ func (c *Client) Start(ctx context.Context, req *StartReq, res *StartRes) error 
 	return nil
 }
 
-func (c *Client) Stop(ctx context.Context, req *StopReq, res *StopRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Stop(ctx context.Context, id string) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Stop", req, res)
+	res := &StopRes{}
+
+	err = cli.Call(ctx, c.servicePath, "Stop", &StopReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
@@ -252,13 +272,15 @@ func (c *Client) Stop(ctx context.Context, req *StopReq, res *StopRes) error {
 	return nil
 }
 
-func (c *Client) Status(ctx context.Context, req *StatusReq, res *StatusRes) error {
-	cli, err := c.getClient(req.Id)
+func (c *Client) Status(ctx context.Context, id string, res *StatusRes) error {
+	cli, err := c.getClient(id)
 	if err != nil {
 		return err
 	}
 
-	err = cli.Call(ctx, c.servicePath, "Status", req, res)
+	err = cli.Call(ctx, c.servicePath, "Status", &StatusReq{
+		Id: id,
+	}, res)
 	if err == nil {
 		return err
 	}
