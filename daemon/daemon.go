@@ -220,14 +220,23 @@ func main() {
 
 			if c.IsSet("oauth_validate") {
 				srv.AuthFunc = func(ctx context.Context, req *protocol.Message, token string) error {
-					resp, err := http.Get(fmt.Sprintf("%s?token=%s&method=%s", user.OAuthURL, token, req.ServiceMethod))
+					client := http.Client{}
+
+					vreq, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s?access_token=%s&method=%s", user.OAuthURL, token, req.ServiceMethod), nil)
+					if err != nil {
+						return err
+					}
+
+					resp, err := client.Do(vreq)
 					if err != nil {
 						return err
 					}
 					defer resp.Body.Close()
+
 					if resp.StatusCode != http.StatusOK {
-						return errors.New("permission denied")
+						return errors.New("access denied")
 					}
+
 					return nil
 				}
 			}

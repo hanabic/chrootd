@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"time"
 
@@ -49,7 +48,7 @@ func main() {
 					Usage: "application secret",
 				},
 				&cli.StringFlag{
-					Name:  "oauth_tokenurl",
+					Name:  "oauth_token",
 					Usage: "enable permission control if this option is given",
 				},
 				&cli.StringFlag{
@@ -135,11 +134,11 @@ func main() {
 				return err
 			}
 
-			if c.IsSet("oauth_tokenurl") {
+			if c.IsSet("oauth_token") {
 				cfg := &clientcredentials.Config{
 					ClientID:     c.String("oauth_id"),
 					ClientSecret: c.String("oauth_secret"),
-					TokenURL:     c.String("oauth_tokenurl"),
+					TokenURL:     c.String("oauth_token"),
 					Scopes:       []string{"chrootd"},
 				}
 
@@ -148,13 +147,8 @@ func main() {
 					return err
 				}
 
-				str, err := json.Marshal(tok)
-				if err != nil {
-					return err
-				}
-
 				c.Context = context.WithValue(c.Context, share.ReqMetaDataKey, map[string]string{
-					share.AuthKey: string(str),
+					share.AuthKey: tok.AccessToken,
 				})
 			}
 

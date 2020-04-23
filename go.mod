@@ -13,6 +13,7 @@ require (
 	github.com/docker/go-units v0.4.0
 	github.com/docker/libkv v0.2.1
 	github.com/etcd-io/etcd v3.3.20+incompatible // indirect
+	github.com/go-session/session v3.1.2+incompatible
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/golang/protobuf v1.4.0-rc.4
 	github.com/imdario/mergo v0.3.9
@@ -36,4 +37,5 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20200217220822-9197077df867
 	google.golang.org/grpc v1.26.0
+	gopkg.in/oauth2.v3 v3.12.0
 )
