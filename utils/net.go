@@ -2,12 +2,26 @@ package utils
 
 import (
 	"fmt"
+	"net"
 	"strings"
 )
 
 type Addr struct {
 	network string
 	addr    string
+}
+
+func NewAddrFree() *Addr {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil
+	}
+	defer listener.Close()
+
+	return &Addr{
+		network: listener.Addr().Network(),
+		addr:    listener.Addr().String(),
+	}
 }
 
 func NewAddrFromString(s string) *Addr {

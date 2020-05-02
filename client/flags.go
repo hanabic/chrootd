@@ -1,23 +1,13 @@
-package registry
+package client
 
+/*
 import (
 	"fmt"
 
-	"github.com/docker/libkv"
-	"github.com/docker/libkv/store"
-	"github.com/docker/libkv/store/consul"
-	"github.com/docker/libkv/store/zookeeper"
-	etcdv3 "github.com/smallnest/libkv-etcdv3-store"
-	"github.com/xhebox/libkv-bolt"
+	valkeyrie "github.com/abronan/valkeyrie/store"
 	"github.com/urfave/cli/v2"
+	"github.com/xhebox/chrootd/store"
 )
-
-func init() {
-	boltdb.Register()
-	etcdv3.Register()
-	consul.Register()
-	zookeeper.Register()
-}
 
 var (
 	RegistryFlags = []cli.Flag{
@@ -43,14 +33,10 @@ func NewRegistryFromCli(c *cli.Context) (Registry, error) {
 		return nil, fmt.Errorf("no backend set")
 	}
 
-	store, err := libkv.NewStore(
-		store.Backend(backend),
+	return store.NewValkeyrie(
+		valkeyrie.Backend(backend),
 		c.StringSlice("registry"),
-		&store.Config{Bucket: c.String("registry_bucket")},
+		&valkeyrie.Config{Bucket: c.String("registry_bucket")},
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewStoreRegistry(store), nil
 }
+*/
