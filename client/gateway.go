@@ -1,99 +1,104 @@
 package client
 
 import (
-	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
-	"time"
+	"strings"
 
-	"github.com/pkg/errors"
-	"github.com/smallnest/rpcx/protocol"
-	"github.com/smallnest/rpcx/server"
+	"github.com/osamingo/jsonrpc"
+	"github.com/smallnest/rpcx/share"
 )
 
-type HTTPListener struct {
-	conn chan *requestConn
+type Gateway struct {
+	cli Client
 }
 
-func NewHTTPListener() *HTTPListener {
-	return &HTTPListener{conn: make(chan *requestConn)}
-}
-
-func (ln *HTTPListener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	args, err := server.HTTPRequest2RpcxRequest(r)
+func NewGateway(network, addr string) (*Gateway, error) {
+	cli, err := newRpcxClient(network, addr)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		return nil, err
 	}
+	return &Gateway{cli: cli}, nil
+}
 
-	rp, wp := io.Pipe()
-	conn := &requestConn{rd: bytes.NewReader(args.Encode()), wt: wp}
-	ln.conn <- conn
-
-	reply, err := protocol.Read(rp)
+func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rpcs, batch, err := jsonrpc.ParseRequest(r)
 	if err != nil {
-		w.WriteHeader(http.StatusUnavailableForLegalReasons)
+		err := jsonrpc.SendResponse(w, []*jsonrpc.Response{
+			{
+				Version: jsonrpc.Version,
+				Error:   err,
+			},
+		}, false)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
 	}
 
-	wh := w.Header()
-	wh.Set(server.XMessageType, fmt.Sprint(reply.Header.MessageType()))
-	wh.Set(server.XMessageID, fmt.Sprint(reply.Header.Seq()))
-	wh.Set(server.XMessageStatusType, fmt.Sprint(reply.Header.MessageStatusType()))
-	wh.Set(server.XSerializeType, fmt.Sprint(reply.Header.SerializeType()))
-	io.Copy(w, bytes.NewReader(reply.Payload))
-}
+	resp := make([]*jsonrpc.Response, len(rpcs))
 
-func (ln *HTTPListener) Accept() (net.Conn, error) {
-	c, ok := <-ln.conn
-	if !ok {
-		return nil, errors.New("listener closed")
+	for i := range rpcs {
+		var qs []interface{}
+		var rq, rs interface{}
+		var e error
+		ctx := r.Context()
+
+		_path := strings.SplitN(rpcs[i].Method, ".", 2)
+		if len(_path) < 2 {
+			goto exit
+		}
+
+		e = json.Unmarshal(*rpcs[i].Params, &qs)
+		if e != nil {
+			goto exit
+		}
+
+		if len(qs) == 1 {
+			rq = qs[0]
+		} else if len(qs) >= 2 {
+			if meta, ok := qs[0].(map[string]interface{}); ok {
+				m := make(map[string]string)
+				for k, v := range meta {
+					m[k] = fmt.Sprint(v)
+				}
+				ctx = context.WithValue(ctx, share.ReqMetaDataKey, m)
+				if len(qs) == 2 {
+					rq = qs[1]
+				} else {
+					rq = qs[1:]
+				}
+			}
+		} else {
+			rq = qs
+		}
+
+		e = g.cli.Call(ctx, _path[0], _path[1], rq, &rs)
+		if e != nil {
+			goto exit
+		}
+
+		resp[i] = &jsonrpc.Response{
+			Version: jsonrpc.Version,
+			Result:  rs,
+		}
+		continue
+
+	exit:
+		resp[i] = &jsonrpc.Response{
+			Version: jsonrpc.Version,
+			Error:   jsonrpc.ErrInternal(),
+		}
 	}
-	return c, nil
+
+	if err := jsonrpc.SendResponse(w, resp, batch); err != nil {
+		fmt.Fprint(w, "Failed to encode result objects")
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
-func (ln *HTTPListener) Close() error {
-	close(ln.conn)
-	return nil
-}
-
-func (ln *HTTPListener) Addr() net.Addr {
-	return &net.IPAddr{}
-}
-
-type requestConn struct {
-	rd io.Reader
-	wt io.Writer
-}
-
-func (c *requestConn) Read(b []byte) (n int, err error) {
-	return c.rd.Read(b)
-}
-
-func (c *requestConn) Write(b []byte) (n int, err error) {
-	return c.wt.Write(b)
-}
-
-func (c *requestConn) Close() error {
-	return nil
-}
-
-func (c *requestConn) LocalAddr() net.Addr {
-	return &net.IPAddr{}
-}
-
-func (c *requestConn) RemoteAddr() net.Addr {
-	return &net.IPAddr{}
-}
-
-func (c *requestConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *requestConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *requestConn) SetWriteDeadline(t time.Time) error {
-	return nil
+func (g *Gateway) Close() error {
+	return g.cli.Close()
 }

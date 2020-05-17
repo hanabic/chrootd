@@ -53,7 +53,7 @@ func NewTomlFlagLoader(config string) cli.BeforeFunc {
 
 		tree, err := toml.LoadFile(file)
 		if err != nil {
-			return err
+			return nil
 		}
 
 		for _, v := range c.App.Flags {

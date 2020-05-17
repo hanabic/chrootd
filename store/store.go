@@ -1,34 +1,20 @@
 package store
 
-type StoreList interface {
-	List(string, func(string, []byte) error) error
-}
-
-type StoreGet interface {
-	Get(string) ([]byte, error)
-}
-
-type StoreClose interface {
+type Store interface {
+	Has(string) (bool, error)
+	Get(string) (uint64, []byte, error)
+	List(string, func(string, uint64, []byte) error) error
+	Delete(string, uint64) error
+	Put(string, uint64, []byte) error
+	NextSequence() (uint64, error)
 	Close() error
 }
 
-type StorePut interface {
-	Put(string, []byte) error
-}
-
-type StoreDelete interface {
-	Delete(string) error
-}
-
-type StoreHas interface {
-	Has(string) (bool, error)
-}
-
-type Store interface {
-	StoreList
-	StoreGet
-	StorePut
-	StoreDelete
-	StoreHas
-	StoreClose
+func LoadOrStore(s Store, k, v string) (string, error) {
+	_, idb, err := s.Get(k)
+	if err != nil || len(idb) == 0 {
+		err = s.Put(k, 0, []byte(v))
+		return v, err
+	}
+	return string(idb), nil
 }

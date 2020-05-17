@@ -3,12 +3,21 @@ package utils
 import (
 	"fmt"
 	"net"
-	"strings"
+	"strconv"
 )
 
 type Addr struct {
 	network string
 	addr    string
+	port    int
+}
+
+func NewAddr(network, addr string, port int) *Addr {
+	return &Addr{
+		network: network,
+		addr:    addr,
+		port:    port,
+	}
 }
 
 func NewAddrFree() *Addr {
@@ -18,32 +27,28 @@ func NewAddrFree() *Addr {
 	}
 	defer listener.Close()
 
-	return &Addr{
-		network: listener.Addr().Network(),
-		addr:    listener.Addr().String(),
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return nil
 	}
+
+	return NewAddr("tcp", addr.IP.String(), addr.Port)
 }
 
-func NewAddrFromString(s string) *Addr {
-	r := strings.SplitN(s, "@", 2)
-	if len(r) == 2 {
-		return &Addr{
-			network: r[0],
-			addr:    r[1],
-		}
-	} else {
-		return &Addr{
-			network: "tcp",
-			addr:    r[0],
-		}
-	}
+func NewAddrNet(addr net.Addr) *Addr {
+	host, portstr, _ := net.SplitHostPort(addr.String())
+	port, _ := strconv.Atoi(portstr)
+	return NewAddr(addr.Network(), host, port)
 }
 
-func NewAddr(a, b string) *Addr {
-	return &Addr{
-		network: a,
-		addr:    b,
-	}
+func NewAddrString(network, addr string) *Addr {
+	host, portstr, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(portstr)
+	return NewAddr(network, host, port)
+}
+
+func (c *Addr) SetNetwork(network string) {
+	c.network = network
 }
 
 func (c *Addr) Network() string {
@@ -54,6 +59,19 @@ func (c *Addr) Addr() string {
 	return c.addr
 }
 
+func (c *Addr) Port() int {
+	return c.port
+}
+
 func (c *Addr) String() string {
-	return fmt.Sprintf("%s@%s", c.network, c.addr)
+	switch c.network {
+	case "http", "https":
+		if c.port <= 0 {
+			return fmt.Sprintf("%s://%s/", c.network, c.addr)
+		} else {
+			return fmt.Sprintf("%s://%s:%d/", c.network, c.addr, c.port)
+		}
+	default:
+		return fmt.Sprintf("%s:%d", c.addr, c.port)
+	}
 }
