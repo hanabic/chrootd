@@ -157,7 +157,6 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 		Rootfs: filepath.Join(m.rootfsPath, rootfs),
 		Cgroups: &configs.Cgroup{
 			Name:      "container",
-			Parent:    "system",
 			Resources: &meta.Resources,
 		},
 		Namespaces: configs.Namespaces{
