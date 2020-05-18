@@ -41,6 +41,7 @@ require (
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190809123943-df4f5c81cb3b // indirect
 	github.com/ybbus/jsonrpc v1.1.2-0.20200212073916-a94e6ce5643c
 	go.etcd.io/bbolt v1.3.4
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775

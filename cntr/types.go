@@ -13,6 +13,8 @@ type Taskinfo struct {
 	Env          []string             `json:"env"`
 	Capabilities configs.Capabilities `json:"capabilities"`
 	Rlimits      []specs.POSIXRlimit  `json:"rlimits"`
+	TermHeight   uint16               `json:"term_height"`
+	TermWidth    uint16               `json:"term_width"`
 }
 
 type Attacher interface {

@@ -15,10 +15,10 @@ import (
 
 type task struct {
 	*libcontainer.Process
-	mu         sync.Mutex
-	Inr, Inw   *os.File
-	Out        *bytes.Buffer
-	closed     bool
+	mu       sync.Mutex
+	Inr, Inw *os.File
+	Out      *bytes.Buffer
+	closed   bool
 }
 
 func (t *task) Read(buf []byte) (int, error) {
@@ -74,14 +74,20 @@ func (c *cntr) Meta() (*mtyp.Metainfo, error) {
 }
 
 func (c *cntr) Start(rt *Taskinfo) (string, error) {
+	if len(rt.Args) == 0 {
+		return "", errors.New("empty args, should have at least one argument")
+	}
+
 	t := &task{
 		Process: &libcontainer.Process{
-			Cwd:          "/",
-			Args:         rt.Args,
-			Env:          rt.Env,
-			Capabilities: &rt.Capabilities,
-			Rlimits:      spec2runcRlimits(rt.Rlimits),
-			Init:         len(c.tasks) == 0,
+			Cwd:           "/",
+			Args:          rt.Args,
+			Env:           rt.Env,
+			Capabilities:  &rt.Capabilities,
+			Rlimits:       spec2runcRlimits(rt.Rlimits),
+			Init:          len(c.tasks) == 0,
+			ConsoleHeight: rt.TermHeight,
+			ConsoleWidth:  rt.TermWidth,
 		},
 		Out: bytes.NewBufferString(""),
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -12,6 +13,7 @@ import (
 	ctyp "github.com/xhebox/chrootd/cntr"
 	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 func capFromCli(res *configs.Capabilities, c *cli.Context) {
@@ -167,8 +169,18 @@ func TaskFromCli(c *cli.Context) (*ctyp.Taskinfo, error) {
 		res.Args = c.Args().Slice()
 	}
 
+	if len(res.Args) == 0 {
+		return nil, errors.New("lack program executable path")
+	}
+
 	if c.IsSet("env") {
 		res.Env = c.StringSlice("env")
+	}
+
+	width, height, err := terminal.GetSize(int(os.Stdout.Fd()))
+	if err == nil {
+		res.TermHeight = uint16(height)
+		res.TermWidth = uint16(width)
 	}
 
 	capFromCli(&res.Capabilities, c)
