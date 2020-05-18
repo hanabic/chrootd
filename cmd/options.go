@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -10,57 +12,141 @@ import (
 	"github.com/xhebox/chrootd/utils"
 )
 
-// TODO: read from file
-func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
-	img := strings.SplitN(c.String("image"), ":", 2)
-	if len(img) < 2 {
-		img = []string{c.String("image"), "latest"}
+func capFromCli(res *configs.Capabilities, c *cli.Context) {
+	if c.IsSet("capabilities.bounding") {
+		res.Bounding = c.StringSlice("capabilities.bounding")
 	}
 
-	res := &mtyp.Metainfo{
-		Id:             c.String("id"),
-		Name:           c.String("name"),
-		Image:          img[0],
-		ImageReference: img[1],
-		Capabilities: configs.Capabilities{
-			Bounding:    c.StringSlice("capabilities.bounding"),
-			Effective:   c.StringSlice("capabilities.effective"),
-			Inheritable: c.StringSlice("capabilities.inheritable"),
-			Permitted:   c.StringSlice("capabilities.permitted"),
-			Ambient:     c.StringSlice("capabilities.ambient"),
-		},
-		Resources: configs.Resources{
-			BlkioWeight:       uint16(c.Uint64("resources.blkio-weight")),
-			CpuShares:         c.Uint64("resources.cpu-shares"),
-			CpuQuota:          c.Int64("resources.cpu-quota"),
-			CpuPeriod:         c.Uint64("resources.cpu-period"),
-			CpuRtRuntime:      c.Int64("resources.cpu-rt-quota"),
-			CpuRtPeriod:       c.Uint64("resources.cpu-rt-period"),
-			CpusetCpus:        c.String("resources.cpuset-cpus"),
-			CpusetMems:        c.String("resources.cpuset-mems"),
-			KernelMemory:      c.Int64("resources.kernel-memory"),
-			Memory:            c.Int64("resources.memory"),
-			MemorySwap:        c.Int64("resources.memory-swap"),
-			MemoryReservation: c.Int64("resources.memory-reservation"),
-			PidsLimit:         c.Int64("resources.pids-limit"),
-		},
+	if c.IsSet("capabilities.effective") {
+		res.Effective = c.StringSlice("capabilities.effective")
+	}
+
+	if c.IsSet("capabilities.inheritable") {
+		res.Inheritable = c.StringSlice("capabilities.inheritable")
+	}
+
+	if c.IsSet("capabilities.permitted") {
+		res.Permitted = c.StringSlice("capabilities.permitted")
+	}
+
+	if c.IsSet("capabilities.ambient") {
+		res.Ambient = c.StringSlice("capabilities.ambient")
+	}
+}
+
+func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
+	res := &mtyp.Metainfo{}
+
+	if tmpl := c.String("file"); tmpl != "" {
+		tb, err := ioutil.ReadFile(tmpl)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal(tb, res)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if c.IsSet("image") {
+		img := strings.SplitN(c.String("image"), ":", 2)
+		if len(img) < 2 {
+			img = []string{c.String("image"), "latest"}
+		}
+		res.Image = img[0]
+		res.ImageReference = img[1]
+	}
+
+	if c.IsSet("id") {
+		res.Id = c.String("id")
+	}
+
+	if c.IsSet("name") {
+		res.Name = c.String("name")
+	}
+
+	capFromCli(&res.Capabilities, c)
+
+	if c.IsSet("resources.blkio-weight") {
+		res.Resources.BlkioWeight = uint16(c.Uint64("resources.blkio-weight"))
+	}
+
+	if c.IsSet("resources.cpu-shares") {
+		res.Resources.CpuShares = c.Uint64("resources.cpu-shares")
+	}
+
+	if c.IsSet("resources.cpu-quota") {
+		res.Resources.CpuQuota = c.Int64("resources.cpu-quota")
+	}
+
+	if c.IsSet("resources.cpu-period") {
+		res.Resources.CpuPeriod = c.Uint64("resources.cpu-period")
+	}
+
+	if c.IsSet("resources.cpu-rt-quota") {
+		res.Resources.CpuRtRuntime = c.Int64("resources.cpu-rt-quota")
+	}
+
+	if c.IsSet("resources.cpu-rt-period") {
+		res.Resources.CpuRtPeriod = c.Uint64("resources.cpu-rt-period")
+	}
+
+	if c.IsSet("resources.cpuset-cpus") {
+		res.Resources.CpusetCpus = c.String("resources.cpuset-cpus")
+	}
+
+	if c.IsSet("resources.cpuset-mems") {
+		res.Resources.CpusetMems = c.String("resources.cpuset-mems")
+	}
+
+	if c.IsSet("resources.kernel-memory") {
+		res.Resources.KernelMemory = c.Int64("resources.kernel-memory")
+	}
+	if c.IsSet("resources.memory") {
+		res.Resources.Memory = c.Int64("resources.memory")
+	}
+
+	if c.IsSet("resources.memory-swap") {
+		res.Resources.MemorySwap = c.Int64("resources.memory-swap")
+	}
+
+	if c.IsSet("resources.memory-reservation") {
+		res.Resources.MemoryReservation = c.Int64("resources.memory-reservation")
+	}
+
+	if c.IsSet("resources.pids-limit") {
+		res.Resources.PidsLimit = c.Int64("resources.pids-limit")
 	}
 
 	return res, nil
 }
 
 func TaskFromCli(c *cli.Context) (*ctyp.Taskinfo, error) {
-	res := &ctyp.Taskinfo{
-		Args: c.Args().Slice(),
-		Env:  c.StringSlice("env"),
-		Capabilities: configs.Capabilities{
-			Bounding:    c.StringSlice("capabilities.bounding"),
-			Effective:   c.StringSlice("capabilities.effective"),
-			Inheritable: c.StringSlice("capabilities.inheritable"),
-			Permitted:   c.StringSlice("capabilities.permitted"),
-			Ambient:     c.StringSlice("capabilities.ambient"),
-		},
+	res := &ctyp.Taskinfo{}
+
+	if tmpl := c.String("file"); tmpl != "" {
+		tb, err := ioutil.ReadFile(tmpl)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal(tb, res)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	if c.Args().Len() > 0 {
+		res.Args = c.Args().Slice()
+	}
+
+	if c.IsSet("env") {
+		res.Env = c.StringSlice("env")
+	}
+
+	capFromCli(&res.Capabilities, c)
+
 	return res, nil
 }
 
