@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
@@ -36,6 +38,9 @@ var TaskAttach = &cli.Command{
 
 		ch := make(chan bool, 1)
 		data := make(chan []byte, 1)
+		h := make(chan os.Signal, 1)
+
+		signal.Notify(h, syscall.SIGINT, syscall.SIGTERM)
 
 		go func() {
 			io.Copy(os.Stdout, rw)
@@ -59,6 +64,11 @@ var TaskAttach = &cli.Command{
 	outer:
 		for {
 			select {
+			case <-h:
+				_, err = io.Copy(rw, bytes.NewReader([]byte{0x03}))
+				if err != nil {
+					return err
+				}
 			case <-ch:
 				break outer
 			case <-c.Context.Done():

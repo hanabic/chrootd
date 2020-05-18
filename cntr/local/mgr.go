@@ -1,6 +1,7 @@
 package local
 
 import (
+	"sort"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -155,6 +156,10 @@ func (m *CntrManager) ID() (string, error) {
 }
 
 func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error) {
+	if sort.SearchStrings(meta.RootfsIds, rootfs) == len(meta.RootfsIds) {
+		return "", errors.New("wrong rootfs id")
+	}
+
 	cfg := &configs.Config{
 		Rootfs: filepath.Join(m.rootfsPath, rootfs),
 		Cgroups: &configs.Cgroup{
@@ -255,7 +260,8 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 	}
 
 	cfg.Rlimits = append(cfg.Rlimits, spec2runcRlimits(meta.Rlimits)...)
-	cfg.Mounts = append(cfg.Mounts, m.spec2runcMounts(meta.Mount)...)
+
+	m.spec2runcMounts(cfg, meta.Mount)
 
 	err := mergo.Merge(cfg.Cgroups.Resources, meta.Resources)
 	if err != nil {

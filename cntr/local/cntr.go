@@ -3,6 +3,7 @@ package local
 import (
 	"bytes"
 	"fmt"
+	"syscall"
 	"os"
 	"sync"
 	"time"
@@ -29,8 +30,22 @@ func (t *task) Read(buf []byte) (int, error) {
 	return t.Out.Read(buf)
 }
 
-func (t *task) Write(buf []byte) (int, error) {
-	return t.Inw.Write(buf)
+func (t *task) Write(buf []byte) (n int, err error) {
+	tbuf := bytes.NewBuffer(nil)
+	tbuf.Grow(len(buf))
+	for _, b := range buf {
+		switch b {
+		case 0x03:
+			t.Signal(syscall.SIGTERM)
+			return t.Inw.Write(tbuf.Bytes())
+		default:
+			err = tbuf.WriteByte(b)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return t.Inw.Write(tbuf.Bytes())
 }
 
 func (t *task) CloseWrite() error {
@@ -137,9 +152,9 @@ func (c *cntr) Start(rt *Taskinfo) (string, error) {
 }
 
 func (c *cntr) Stop(id string, kill bool) error {
-	sig := os.Interrupt
+	sig := syscall.SIGTERM
 	if kill {
-		sig = os.Kill
+		sig = syscall.SIGKILL
 	}
 
 	t, ok := c.getTask(id)
@@ -151,9 +166,9 @@ func (c *cntr) Stop(id string, kill bool) error {
 }
 
 func (c *cntr) StopAll(kill bool) error {
-	sig := os.Interrupt
+	sig := syscall.SIGTERM
 	if kill {
-		sig = os.Kill
+		sig = syscall.SIGKILL
 	}
 	c.cntr.Signal(sig, true)
 

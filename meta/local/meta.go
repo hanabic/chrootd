@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 
 	"github.com/openSUSE/umoci/oci/cas/dir"
 	"github.com/openSUSE/umoci/oci/casext"
@@ -112,6 +113,8 @@ func (m *MetaManager) getMeta(id string) (uint64, *Metainfo, error) {
 
 func (m *MetaManager) putMeta(idx uint64, id string, meta *Metainfo) error {
 	meta.Id = id
+
+	sort.Strings(meta.RootfsIds)
 
 	mb, err := json.Marshal(meta)
 	if err != nil {

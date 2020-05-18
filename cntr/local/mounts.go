@@ -6,6 +6,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/xhebox/chrootd/utils"
 	"golang.org/x/sys/unix"
 )
 
@@ -59,17 +60,19 @@ var mountPropagationMap = map[string]int{
 	"runbindable": unix.MS_UNBINDABLE | unix.MS_REC,
 }
 
-func (m *CntrManager) spec2runcMounts(mounts []rspec.Mount) []*configs.Mount {
-	res := []*configs.Mount{}
+func (m *CntrManager) spec2runcMounts(cfg *configs.Config, mounts []rspec.Mount) {
 	for _, v := range mounts {
 		pa := filepath.Clean(v.Destination)
 		switch {
 		case pa == "/etc/resolv.conf" && m.BinResolv:
-			res = append(res, &configs.Mount{
-				Source:      "/etc/resolv.conf",
-				Destination: "/etc/resolv.conf",
-				Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
-			})
+			if utils.PathExist(pa) {
+				cfg.Mounts = append(cfg.Mounts, &configs.Mount{
+					Device:      "bind",
+					Source:      "/etc/resolv.conf",
+					Destination: "/etc/resolv.conf",
+					Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
+				})
+			}
 		case strings.HasPrefix(pa, "/proc"),
 			strings.HasPrefix(pa, "/sys"),
 			strings.HasPrefix(pa, "/dev"):
@@ -88,7 +91,7 @@ func (m *CntrManager) spec2runcMounts(mounts []rspec.Mount) []*configs.Mount {
 				}
 			}
 
-			res = append(res, &configs.Mount{
+			cfg.Mounts = append(cfg.Mounts, &configs.Mount{
 				Source:           v.Source,
 				Destination:      v.Destination,
 				Device:           v.Type,
@@ -97,5 +100,4 @@ func (m *CntrManager) spec2runcMounts(mounts []rspec.Mount) []*configs.Mount {
 			})
 		}
 	}
-	return res
 }
