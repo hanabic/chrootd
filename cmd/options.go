@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
+	rspec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	ctyp "github.com/xhebox/chrootd/cntr"
 	mtyp "github.com/xhebox/chrootd/meta"
@@ -32,6 +34,77 @@ func capFromCli(res *configs.Capabilities, c *cli.Context) {
 	if c.IsSet("capabilities.ambient") {
 		res.Ambient = c.StringSlice("capabilities.ambient")
 	}
+}
+
+func resFromCli(res *configs.Resources, c *cli.Context) {
+	if c.IsSet("resources.blkio-weight") {
+		res.BlkioWeight = uint16(c.Uint64("resources.blkio-weight"))
+	}
+
+	if c.IsSet("resources.cpu-shares") {
+		res.CpuShares = c.Uint64("resources.cpu-shares")
+	}
+
+	if c.IsSet("resources.cpu-quota") {
+		res.CpuQuota = c.Int64("resources.cpu-quota")
+	}
+
+	if c.IsSet("resources.cpu-period") {
+		res.CpuPeriod = c.Uint64("resources.cpu-period")
+	}
+
+	if c.IsSet("resources.cpu-rt-quota") {
+		res.CpuRtRuntime = c.Int64("resources.cpu-rt-quota")
+	}
+
+	if c.IsSet("resources.cpu-rt-period") {
+		res.CpuRtPeriod = c.Uint64("resources.cpu-rt-period")
+	}
+
+	if c.IsSet("resources.cpuset-cpus") {
+		res.CpusetCpus = c.String("resources.cpuset-cpus")
+	}
+
+	if c.IsSet("resources.cpuset-mems") {
+		res.CpusetMems = c.String("resources.cpuset-mems")
+	}
+
+	if c.IsSet("resources.kernel-memory") {
+		res.KernelMemory = c.Int64("resources.kernel-memory")
+	}
+	if c.IsSet("resources.memory") {
+		res.Memory = c.Int64("resources.memory")
+	}
+
+	if c.IsSet("resources.memory-swap") {
+		res.MemorySwap = c.Int64("resources.memory-swap")
+	}
+
+	if c.IsSet("resources.memory-reservation") {
+		res.MemoryReservation = c.Int64("resources.memory-reservation")
+	}
+
+	if c.IsSet("resources.pids-limit") {
+		res.PidsLimit = c.Int64("resources.pids-limit")
+	}
+}
+
+func mountFromCli(res *[]rspec.Mount, c *cli.Context) error {
+	if c.IsSet("mount") {
+		mounts := c.StringSlice("mount")
+		for _, mnt := range mounts {
+			args := strings.SplitN(mnt, ":", 2)
+			if len(args) != 2 {
+				return errors.New("invalid mount flag")
+			}
+			*res = append(*res, rspec.Mount{
+				Type:        "bind",
+				Source:      args[0],
+				Destination: args[1],
+			})
+		}
+	}
+	return nil
 }
 
 func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
@@ -68,56 +141,9 @@ func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
 
 	capFromCli(&res.Capabilities, c)
 
-	if c.IsSet("resources.blkio-weight") {
-		res.Resources.BlkioWeight = uint16(c.Uint64("resources.blkio-weight"))
-	}
+	resFromCli(&res.Resources, c)
 
-	if c.IsSet("resources.cpu-shares") {
-		res.Resources.CpuShares = c.Uint64("resources.cpu-shares")
-	}
-
-	if c.IsSet("resources.cpu-quota") {
-		res.Resources.CpuQuota = c.Int64("resources.cpu-quota")
-	}
-
-	if c.IsSet("resources.cpu-period") {
-		res.Resources.CpuPeriod = c.Uint64("resources.cpu-period")
-	}
-
-	if c.IsSet("resources.cpu-rt-quota") {
-		res.Resources.CpuRtRuntime = c.Int64("resources.cpu-rt-quota")
-	}
-
-	if c.IsSet("resources.cpu-rt-period") {
-		res.Resources.CpuRtPeriod = c.Uint64("resources.cpu-rt-period")
-	}
-
-	if c.IsSet("resources.cpuset-cpus") {
-		res.Resources.CpusetCpus = c.String("resources.cpuset-cpus")
-	}
-
-	if c.IsSet("resources.cpuset-mems") {
-		res.Resources.CpusetMems = c.String("resources.cpuset-mems")
-	}
-
-	if c.IsSet("resources.kernel-memory") {
-		res.Resources.KernelMemory = c.Int64("resources.kernel-memory")
-	}
-	if c.IsSet("resources.memory") {
-		res.Resources.Memory = c.Int64("resources.memory")
-	}
-
-	if c.IsSet("resources.memory-swap") {
-		res.Resources.MemorySwap = c.Int64("resources.memory-swap")
-	}
-
-	if c.IsSet("resources.memory-reservation") {
-		res.Resources.MemoryReservation = c.Int64("resources.memory-reservation")
-	}
-
-	if c.IsSet("resources.pids-limit") {
-		res.Resources.PidsLimit = c.Int64("resources.pids-limit")
-	}
+	mountFromCli(&res.Mount, c)
 
 	return res, nil
 }
@@ -266,6 +292,10 @@ var (
 		&cli.StringFlag{
 			Name:  "image",
 			Usage: "image reference",
+		},
+		&cli.StringSliceFlag{
+			Name:  "mount",
+			Usage: "mount directories or files, arguments should be of form 'src:dst'",
 		},
 		&cli.StringFlag{
 			Name:  "file",
