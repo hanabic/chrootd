@@ -38,21 +38,17 @@ type User struct {
 
 	OAuthURL string
 
-	ConsulAddr string
-
+	ConsulAddr          string
 	ServiceAddr         string
 	ServiceHTTP         string
 	ServiceReadTimeout  time.Duration
 	ServiceWriteTimeout time.Duration
 	ServiceRootless     bool
+	AttachAddr          string
 
-	AttachAddr   string
-	AttachLimits int
-
+	ConfPath  string
+	RunPath   string
 	ImagePath string
-
-	ConfPath string
-	RunPath  string
 }
 
 func main() {
@@ -139,12 +135,6 @@ func main() {
 					Usage:       "service will run in rootless mode",
 					Value:       true,
 					Destination: &u.ServiceRootless,
-				},
-				&cli.IntFlag{
-					Name:        "attach_limits",
-					Value:       64,
-					Usage:       "maximum attachable proccess limits",
-					Destination: &u.AttachLimits,
 				},
 				&cli.StringFlag{
 					Name:        "attach_addr",
