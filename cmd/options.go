@@ -124,6 +124,12 @@ func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
 		}
 	}
 
+	res.Mount = append(res.Mount, rspec.Mount{
+		Source:      "/etc/resolv.conf",
+		Destination: "/etc/resolv.conf",
+		Options:     []string{"rbind", "ro"},
+	})
+
 	if c.IsSet("image") {
 		img := strings.SplitN(c.String("image"), ":", 2)
 		if len(img) < 2 {

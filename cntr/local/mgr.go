@@ -59,7 +59,8 @@ type CntrManager struct {
 	cntrs  map[string]*cntr
 	rwmux  sync.RWMutex
 
-	Rootless bool
+	Rootless  bool
+	BinResolv bool
 }
 
 func NewCntrManager(path, image string, s store.Store, opts ...func(*CntrManager) error) (*CntrManager, error) {
@@ -69,6 +70,7 @@ func NewCntrManager(path, image string, s store.Store, opts ...func(*CntrManager
 		rootfsPath:  filepath.Join(path, "rootfs"),
 		cntrs:       make(map[string]*cntr),
 		Rootless:    true,
+		BinResolv:   true,
 	}
 	for _, f := range opts {
 		err := f(mgr)
@@ -163,7 +165,6 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 			{Type: configs.NEWUTS},
 			{Type: configs.NEWIPC},
 			{Type: configs.NEWPID},
-			{Type: configs.NEWNET},
 			{Type: configs.NEWNS},
 			{Type: configs.NEWUSER},
 		},
@@ -201,12 +202,6 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 				Flags:       unix.MS_NOSUID | unix.MS_STRICTATIME,
 				Data:        "mode=755",
 			},
-			{
-				Source:      "sysfs",
-				Destination: "/sys",
-				Device:      "sysfs",
-				Flags:       unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV | unix.MS_RDONLY,
-			},
 		},
 		UidMappings: []configs.IDMap{
 			configs.IDMap{
@@ -225,6 +220,25 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 		Hostname:        meta.Hostname,
 		RootlessCgroups: m.Rootless,
 		RootlessEUID:    m.Rootless,
+		Hooks: &configs.Hooks{
+			Prestart: []configs.Hook{},
+		},
+	}
+
+	if !m.Rootless {
+		cfg.Namespaces = append(cfg.Namespaces, configs.Namespace{Type: configs.NEWNET})
+		cfg.Mounts = append(cfg.Mounts, &configs.Mount{
+				Source:      "sysfs",
+				Destination: "/sys",
+				Device:      "sysfs",
+				Flags:       unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV | unix.MS_RDONLY,
+			})
+	} else {
+		cfg.Mounts = append(cfg.Mounts, &configs.Mount{
+				Source:      "/sys",
+				Destination: "/sys",
+				Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
+			})
 	}
 
 	for _, v := range meta.MaskPaths {
@@ -241,7 +255,7 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 	}
 
 	cfg.Rlimits = append(cfg.Rlimits, spec2runcRlimits(meta.Rlimits)...)
-	cfg.Mounts = append(cfg.Mounts, spec2runcMounts(meta.Mount)...)
+	cfg.Mounts = append(cfg.Mounts, m.spec2runcMounts(meta.Mount)...)
 
 	err := mergo.Merge(cfg.Cgroups.Resources, meta.Resources)
 	if err != nil {

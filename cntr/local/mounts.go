@@ -1,6 +1,9 @@
 package local
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/opencontainers/runc/libcontainer/configs"
 	rspec "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
@@ -56,30 +59,43 @@ var mountPropagationMap = map[string]int{
 	"runbindable": unix.MS_UNBINDABLE | unix.MS_REC,
 }
 
-func spec2runcMounts(mounts []rspec.Mount) []*configs.Mount {
+func (m *CntrManager) spec2runcMounts(mounts []rspec.Mount) []*configs.Mount {
 	res := []*configs.Mount{}
 	for _, v := range mounts {
-		flag := 0
-		propagation := []int{}
-		for _, o := range v.Options {
-			if f, exists := mountMap[o]; exists && f.flag != 0 {
-				if f.clear {
-					flag &= ^f.flag
-				} else {
-					flag |= f.flag
+		pa := filepath.Clean(v.Destination)
+		switch {
+		case pa == "/etc/resolv.conf" && m.BinResolv:
+			res = append(res, &configs.Mount{
+				Source:      "/etc/resolv.conf",
+				Destination: "/etc/resolv.conf",
+				Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
+			})
+		case strings.HasPrefix(pa, "/proc"),
+			strings.HasPrefix(pa, "/sys"),
+			strings.HasPrefix(pa, "/dev"):
+		default:
+			flag := 0
+			propagation := []int{}
+			for _, o := range v.Options {
+				if f, exists := mountMap[o]; exists && f.flag != 0 {
+					if f.clear {
+						flag &= ^f.flag
+					} else {
+						flag |= f.flag
+					}
+				} else if f, exists := mountPropagationMap[o]; exists && f != 0 {
+					propagation = append(propagation, f)
 				}
-			} else if f, exists := mountPropagationMap[o]; exists && f != 0 {
-				propagation = append(propagation, f)
 			}
-		}
 
-		res = append(res, &configs.Mount{
-			Source:           v.Source,
-			Destination:      v.Destination,
-			Device:           v.Type,
-			Flags:            flag,
-			PropagationFlags: propagation,
-		})
+			res = append(res, &configs.Mount{
+				Source:           v.Source,
+				Destination:      v.Destination,
+				Device:           v.Type,
+				Flags:            flag,
+				PropagationFlags: propagation,
+			})
+		}
 	}
 	return res
 }

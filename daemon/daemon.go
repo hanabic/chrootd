@@ -44,6 +44,7 @@ type User struct {
 	ServiceReadTimeout  time.Duration
 	ServiceWriteTimeout time.Duration
 	ServiceRootless     bool
+	ServiceBindresolv   bool
 	AttachAddr          string
 
 	ConfPath  string
@@ -136,6 +137,12 @@ func main() {
 					Value:       true,
 					Destination: &u.ServiceRootless,
 				},
+				&cli.BoolFlag{
+					Name:        "service_bindresolv",
+					Usage:       "allow client  bind /etc/resolv.conf to container",
+					Value:       true,
+					Destination: &u.ServiceBindresolv,
+				},
 				&cli.StringFlag{
 					Name:        "attach_addr",
 					Usage:       "`address` for process attach",
@@ -189,6 +196,7 @@ func main() {
 
 			cmgr, err := cloc.NewCntrManager(user.RunPath, user.ImagePath, states, func(m *cloc.CntrManager) error {
 				m.Rootless = user.ServiceRootless
+				m.BinResolv = user.ServiceBindresolv
 				return nil
 			})
 			if err != nil {
