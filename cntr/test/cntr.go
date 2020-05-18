@@ -322,7 +322,7 @@ func TestCntrInstanceAttach(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) 
 		defer rw.Close()
 
 		b, err = ioutil.ReadAll(rw)
-		if string(b) != "404" {
+		if !strings.HasPrefix(string(b), "internal error") {
 			t.Fatal("except wrong res")
 		}
 	}
