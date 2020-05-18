@@ -11,9 +11,11 @@ import (
 
 	"github.com/imdario/mergo"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
+	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
 	"github.com/tidwall/gjson"
@@ -99,8 +101,10 @@ func NewCntrManager(path, image string, s store.Store, opts ...func(*CntrManager
 	cgroupMgr := libcontainer.Cgroupfs
 	if systemd.IsRunningSystemd() {
 		cgroupMgr = libcontainer.SystemdCgroups
-	}
-	if mgr.Rootless {
+		if cgroups.IsCgroup2UnifiedMode() && mgr.Rootless {
+			cgroupMgr = libcontainer.RootlessSystemdCgroups
+		}
+	} else if mgr.Rootless {
 		cgroupMgr = libcontainer.RootlessCgroupfs
 	}
 
@@ -152,11 +156,9 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 	cfg := &configs.Config{
 		Rootfs: filepath.Join(m.rootfsPath, rootfs),
 		Cgroups: &configs.Cgroup{
-			Name:   "container",
-			Parent: "system",
-			Resources: &configs.Resources{
-				Devices: configs.DefaultAllowedDevices,
-			},
+			Name:      "container",
+			Parent:    "system",
+			Resources: &meta.Resources,
 		},
 		Namespaces: configs.Namespaces{
 			{Type: configs.NEWUTS},
@@ -185,7 +187,7 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 			"/proc/sys",
 			"/proc/sysrq-trigger",
 		},
-		Devices: configs.DefaultAutoCreatedDevices,
+		Devices: specconv.AllowedDevices,
 		Mounts: []*configs.Mount{
 			{
 				Source:      "proc",
