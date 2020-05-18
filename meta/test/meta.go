@@ -16,10 +16,17 @@ func TestMetaManagerID(mgr Manager, t *testing.T) {
 }
 
 func TestMetaManagerCreate(mgr Manager, t *testing.T) {
-	_, err := mgr.Create(&Metainfo{})
+	id1, err := mgr.Create(&Metainfo{})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	id2, err := mgr.Create(&Metainfo{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(id1, id2)
 }
 
 func TestMetaManagerGet(mgr Manager, t *testing.T) {

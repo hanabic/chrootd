@@ -1,6 +1,8 @@
 package client
 
 import (
+	"math/rand"
+	"time"
 	"strings"
 
 	"github.com/hashicorp/consul/api"
@@ -81,6 +83,11 @@ func (m *Proxy) Oneshot(id string, f func(Client) error) error {
 		if err != nil {
 			return nil
 		}
+
+		rand.Seed(time.Now().UnixNano())
+		rand.Shuffle(len(svcs), func(i, j int) {
+			svcs[i], svcs[j] = svcs[j], svcs[i]
+		})
 
 		cnt := -1
 		for _, svc := range svcs {

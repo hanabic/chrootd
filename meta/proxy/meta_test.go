@@ -6,8 +6,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/consul/sdk/testutil"
@@ -36,12 +36,27 @@ func newTestMetaProxy(consul bool, t *testing.T) (*TestMetaProxy, error) {
 		return nil, err
 	}
 
+	s1, err := store.NewWrapStore("l1", s)
+	if err != nil {
+		return nil, err
+	}
+
+	s2, err := store.NewWrapStore("l2", s)
+	if err != nil {
+		return nil, err
+	}
+
 	image, err := filepath.Abs("../../images")
 	if err != nil {
 		return nil, err
 	}
 
-	loc, err := mloc.NewMetaManager(dir, image, s)
+	loc1, err := mloc.NewMetaManager(dir, image, s1)
+	if err != nil {
+		return nil, err
+	}
+
+	loc2, err := mloc.NewMetaManager(filepath.Join(dir, "l1"), image, s2)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +64,13 @@ func newTestMetaProxy(consul bool, t *testing.T) (*TestMetaProxy, error) {
 	addr := utils.NewAddrFree()
 
 	lnRPC, err := net.Listen(addr.Network(), addr.String())
+	if err != nil {
+		return nil, err
+	}
+
+	addr2 := utils.NewAddrFree()
+
+	lnRPC2, err := net.Listen(addr2.Network(), addr2.String())
 	if err != nil {
 		return nil, err
 	}
@@ -71,24 +93,43 @@ func newTestMetaProxy(consul bool, t *testing.T) (*TestMetaProxy, error) {
 		}
 	}
 
-	srv := server.NewServer(
+	srv1 := server.NewServer(
 		func(srv *server.Server) {
 			srv.DisableHTTPGateway = true
 			srv.DisableJSONRPC = true
 		},
 	)
 
-	svc, err := NewMetaService(loc, con, "s", addr)
+	svc1, err := NewMetaService(loc1, con, "s", addr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = srv.RegisterName("s", svc, "")
+	err = srv1.RegisterName("s", svc1, "")
 	if err != nil {
 		return nil, err
 	}
 
-	go srv.ServeListener(addr.Network(), lnRPC)
+	go srv1.ServeListener(addr.Network(), lnRPC)
+
+	srv2 := server.NewServer(
+		func(srv *server.Server) {
+			srv.DisableHTTPGateway = true
+			srv.DisableJSONRPC = true
+		},
+	)
+
+	svc2, err := NewMetaService(loc2, con, "s", addr2)
+	if err != nil {
+		return nil, err
+	}
+
+	err = srv2.RegisterName("s", svc2, "")
+	if err != nil {
+		return nil, err
+	}
+
+	go srv2.ServeListener(addr2.Network(), lnRPC2)
 
 	var mgr mtyp.Manager
 	if consul {
@@ -108,7 +149,15 @@ func newTestMetaProxy(consul bool, t *testing.T) (*TestMetaProxy, error) {
 		}
 	}
 
-	return &TestMetaProxy{dir: dir, tsrv: tsrv, srv: srv, svc: svc, loc: loc, Manager: mgr}, nil
+	return &TestMetaProxy{dir: dir,
+		tsrv:    tsrv,
+		srv1:    srv1,
+		srv2:    srv2,
+		svc1:    svc1,
+		svc2:    svc2,
+		loc1:    loc1,
+		loc2:    loc2,
+		Manager: mgr}, nil
 }
 
 func NewTestMetaProxy(t *testing.T) (*TestMetaProxy, error) {
@@ -122,16 +171,21 @@ func NewTestMetaProxyConsul(t *testing.T) (*TestMetaProxy, error) {
 type TestMetaProxy struct {
 	dir  string
 	tsrv *testutil.TestServer
-	svc  *MetaService
-	loc  mtyp.Manager
-	srv  *server.Server
+	loc1 mtyp.Manager
+	svc1 *MetaService
+	srv1 *server.Server
+	loc2 mtyp.Manager
+	svc2 *MetaService
+	srv2 *server.Server
 	mtyp.Manager
 }
 
 func (t *TestMetaProxy) Close() error {
 	t.Manager.Close()
-	t.srv.Shutdown(context.Background())
-	t.loc.Close()
+	t.srv2.Shutdown(context.Background())
+	t.loc2.Close()
+	t.srv1.Shutdown(context.Background())
+	t.loc1.Close()
 	if t.tsrv != nil {
 		t.tsrv.Stop()
 	}
@@ -245,7 +299,7 @@ func TestMetaManagerConsulID(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	runtime.Gosched()
+	time.Sleep(100 * time.Millisecond)
 
 	mtest.TestMetaManagerID(mgr, t)
 }
