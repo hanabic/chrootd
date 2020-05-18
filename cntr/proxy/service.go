@@ -3,10 +3,8 @@ package proxy
 import (
 	"bytes"
 	"context"
-	//"fmt"
 	"io"
 	"net"
-	//"os"
 	"sync"
 	"time"
 
@@ -47,7 +45,7 @@ func NewCntrService(mgr ctyp.Manager, cli *api.Client, svcname string, rpcAddr, 
 		}
 
 		svc.reg = &api.AgentServiceRegistration{
-			ID:      id,
+			ID:      ksuid.New().String(),
 			Name:    svcname,
 			Address: svc.addr.Addr(),
 			Port:    svc.addr.Port(),

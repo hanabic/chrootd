@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/segmentio/ksuid"
 	"github.com/pkg/errors"
 	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
@@ -34,7 +35,7 @@ func NewMetaService(mgr mtyp.Manager, cli *api.Client, svcname string, rpcAddr *
 		svc.id = id
 
 		svc.reg = &api.AgentServiceRegistration{
-			ID:      svc.id,
+			ID:      ksuid.New().String(),
 			Name:    svcname,
 			Address: svc.addr.Addr(),
 			Port:    svc.addr.Port(),

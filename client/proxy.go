@@ -108,7 +108,7 @@ func (m *Proxy) Oneshot(id string, f func(Client) error) error {
 		}
 
 		if cnt == -1 {
-			return errors.New("all nodes failed")
+			return errors.Errorf("all nodes failed, last error: %s", err)
 		}
 	}
 
