@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
 	ctyp "github.com/xhebox/chrootd/cntr"
-	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
 )
 
@@ -79,13 +78,8 @@ func (s *CntrService) ID(ctx context.Context, req struct{}, res *string) error {
 	return err
 }
 
-type CreateReq struct {
-	Rootfs string
-	Meta   *mtyp.Metainfo
-}
-
-func (s *CntrService) Create(ctx context.Context, req *CreateReq, res *string) error {
-	id, err := s.mgr.Create(req.Meta, req.Rootfs)
+func (s *CntrService) Create(ctx context.Context, req *ctyp.Cntrinfo, res *string) error {
+	id, err := s.mgr.Create(req)
 	if err == nil {
 		*res = id
 	}
@@ -96,18 +90,10 @@ func (s *CntrService) Delete(ctx context.Context, cid string, res *struct{}) err
 	return s.mgr.Delete(cid)
 }
 
-type CntrListRes struct {
-	Id   string
-	Meta *mtyp.Metainfo
-}
-
-func (s *CntrService) List(ctx context.Context, req string, res *[]CntrListRes) error {
+func (s *CntrService) List(ctx context.Context, req string, res *[]ctyp.Cntrinfo) error {
 	cnt := 0
-	return s.mgr.List(req, func(cid string, cmeta *mtyp.Metainfo) error {
-		*res = append(*res, CntrListRes{
-			Id:   cid,
-			Meta: cmeta,
-		})
+	return s.mgr.List(req, func(cmeta *ctyp.Cntrinfo) error {
+		*res = append(*res, *cmeta)
 		cnt++
 		if cnt > s.QueryLimits {
 			return errors.New("exceed the query limits")
@@ -116,7 +102,7 @@ func (s *CntrService) List(ctx context.Context, req string, res *[]CntrListRes) 
 	})
 }
 
-func (s *CntrService) CntrMeta(ctx context.Context, req string, res *mtyp.Metainfo) error {
+func (s *CntrService) CntrMeta(ctx context.Context, req string, res *ctyp.Cntrinfo) error {
 	cntr, err := s.mgr.Get(req)
 	if err != nil {
 		return err

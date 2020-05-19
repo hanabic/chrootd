@@ -3,9 +3,10 @@ package local
 import (
 	"bytes"
 	"fmt"
-	"syscall"
 	"os"
+	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/opencontainers/runc/libcontainer"
@@ -62,18 +63,25 @@ func (t *task) Close() error {
 }
 
 type cntr struct {
-	meta  *mtyp.Metainfo
-	cntr  libcontainer.Container
-	tasks map[string]*task
-	rwmux sync.RWMutex
-	wg    sync.WaitGroup
+	meta   *mtyp.Metainfo
+	cntr   libcontainer.Container
+	tasks  map[string]*task
+	rwmux  sync.RWMutex
+	id     string
+	rootfs string
+	tags   []string
+	wg     sync.WaitGroup
 }
 
-func newCntr(c libcontainer.Container, meta *mtyp.Metainfo) *cntr {
+func newCntr(c libcontainer.Container, meta *mtyp.Metainfo, id string, rootfs string, tags []string) *cntr {
+	sort.Strings(tags)
 	return &cntr{
-		meta:  meta,
-		cntr:  c,
-		tasks: make(map[string]*task),
+		id:     id,
+		rootfs: rootfs,
+		meta:   meta,
+		cntr:   c,
+		tags:   tags,
+		tasks:  make(map[string]*task),
 	}
 }
 
@@ -84,8 +92,13 @@ func (c *cntr) getTask(id string) (*task, bool) {
 	return t, ok
 }
 
-func (c *cntr) Meta() (*mtyp.Metainfo, error) {
-	return c.meta, nil
+func (c *cntr) Meta() (*Cntrinfo, error) {
+	return &Cntrinfo{
+		Id:     c.id,
+		Rootfs: c.rootfs,
+		Tags:   c.tags,
+		Meta:   c.meta,
+	}, nil
 }
 
 func (c *cntr) Start(rt *Taskinfo) (string, error) {

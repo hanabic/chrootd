@@ -8,6 +8,7 @@ import (
 var TaskStop = &cli.Command{
 	Name:      "stop",
 	Usage:     "stop a task, no taskid meaning stop all",
+	Aliases:   []string{"s"},
 	ArgsUsage: "$cntrid [$taskid]",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{

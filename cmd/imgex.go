@@ -5,8 +5,9 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var MetaEximg = &cli.Command{
-	Name:      "eximg",
+var ImgUnpack = &cli.Command{
+	Name:      "unpack",
+	Aliases:   []string{"u"},
 	Usage:     "unpack a rootfs according to the metadata",
 	ArgsUsage: "$metaid",
 	Action: func(c *cli.Context) error {

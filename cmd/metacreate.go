@@ -8,8 +8,9 @@ import (
 )
 
 var MetaCreate = &cli.Command{
-	Name:  "create",
-	Usage: "create a container metadata",
+	Name:    "create",
+	Usage:   "create a container metadata",
+	Aliases: []string{"c"},
 	Flags: utils.ConcatMultipleFlags([]cli.Flag{},
 		metaFlags,
 		resourceFlags,

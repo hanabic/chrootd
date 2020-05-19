@@ -6,8 +6,9 @@ import (
 )
 
 var TaskStart = &cli.Command{
-	Name:  "start",
-	Usage: "start a process in a specific container",
+	Name:    "run",
+	Usage:   "run a process in a specific container",
+	Aliases: []string{"r"},
 	Flags: utils.ConcatMultipleFlags(
 		[]cli.Flag{
 			&cli.StringFlag{

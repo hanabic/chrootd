@@ -11,6 +11,7 @@ import (
 var CntrGet = &cli.Command{
 	Name:      "meta",
 	Usage:     "get container metainfo",
+	Aliases:   []string{"m"},
 	ArgsUsage: "$cntrid",
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)
@@ -20,16 +21,18 @@ var CntrGet = &cli.Command{
 			return err
 		}
 
-		meta, err := cntr.Meta()
+		info, err := cntr.Meta()
 		if err != nil {
 			return err
 		}
 
 		writer := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
 
-		fmt.Fprintf(writer, "Name\tCntrId\tMetaID\tImage\n")
+		fmt.Fprintf(writer, "Name\tTags\tRootfs\tCntrId\tMetaID\tImage\n")
 
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s:%s\n", meta.Name, c.Args().First(), meta.Id, meta.Image, meta.ImageReference)
+		meta := info.Meta
+
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s:%s\n", meta.Name, info.Tags, info.Rootfs, c.Args().First(), meta.Id, meta.Image, meta.ImageReference)
 
 		writer.Flush()
 

@@ -32,7 +32,10 @@ func TestCntrInstanceMeta(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +50,7 @@ func TestCntrInstanceMeta(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if meta.Name != mmeta.Name {
+	if meta.Name != mmeta.Meta.Name {
 		t.Fatal("except same name")
 	}
 }
@@ -72,7 +75,10 @@ func TestCntrInstanceStart(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +116,10 @@ func TestCntrInstanceWait(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +162,10 @@ func TestCntrInstanceStop(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +213,10 @@ func TestCntrInstanceStopAll(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T)
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +264,10 @@ func TestCntrInstanceAttach(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) 
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +366,10 @@ func TestCntrInstanceList(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

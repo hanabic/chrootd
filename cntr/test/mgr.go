@@ -45,7 +45,10 @@ func TestCntrManagerCreate(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = cmgr.Create(meta, rid)
+	_, err = cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +74,10 @@ func TestCntrManagerGet(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +108,10 @@ func TestCntrManagerDelete(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,13 +142,16 @@ func TestCntrManagerList(mmgr mtyp.Manager, cmgr ctyp.Manager, t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cid, err := cmgr.Create(meta, rid)
+	cid, err := cmgr.Create(&ctyp.Cntrinfo{
+		Rootfs: rid,
+		Meta: meta,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = cmgr.List("", func(k string, m *mtyp.Metainfo) error {
-		if k != cid {
+	err = cmgr.List("", func(m *ctyp.Cntrinfo) error {
+		if m.Id != cid {
 			return errors.New("unexpected container id")
 		}
 		return nil

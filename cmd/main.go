@@ -82,9 +82,6 @@ func main() {
 					MetaGet,
 					MetaQuery,
 					MetaDelete,
-					MetaEximg,
-					MetaLsimg,
-					MetaRmimg,
 				},
 			},
 			&cli.Command{
@@ -108,8 +105,18 @@ func main() {
 					TaskAttach,
 				},
 			},
-			MetaIMGList,
-			Create,
+			&cli.Command{
+				Name:  "img",
+				Usage: "manage extracted images",
+				Subcommands: cli.Commands{
+					ImgUnpack,
+					ImgList,
+					ImgRemove,
+				},
+			},
+			Start,
+			Stop,
+			Exec,
 		},
 		Before: func(c *cli.Context) error {
 			user := c.Context.Value("_data").(*User)

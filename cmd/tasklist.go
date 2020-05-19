@@ -10,6 +10,7 @@ import (
 var TaskList = &cli.Command{
 	Name:      "list",
 	Usage:     "list all tasks of a container",
+	Aliases:   []string{"ls", "l"},
 	ArgsUsage: "$cntrid",
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)

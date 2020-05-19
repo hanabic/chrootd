@@ -133,15 +133,25 @@ func main() {
 				},
 				&cli.BoolFlag{
 					Name:        "service_rootless",
+					Aliases:     []string{"rootless"},
 					Usage:       "service will run in rootless mode",
-					Value:       true,
+					Value:       false,
 					Destination: &u.ServiceRootless,
 				},
 				&cli.BoolFlag{
 					Name:        "service_bindresolv",
+					Aliases:     []string{"resolv"},
 					Usage:       "allow client  bind /etc/resolv.conf to container",
-					Value:       true,
+					Value:       false,
 					Destination: &u.ServiceBindresolv,
+				},
+				&cli.StringSliceFlag{
+					Name:        "service_prehook",
+					Usage:       "runhooks before container start",
+				},
+				&cli.StringSliceFlag{
+					Name:        "service_posthook",
+					Usage:       "runhooks after container stop",
 				},
 				&cli.StringFlag{
 					Name:        "attach_addr",
@@ -197,6 +207,8 @@ func main() {
 			cmgr, err := cloc.NewCntrManager(user.RunPath, user.ImagePath, states, func(m *cloc.CntrManager) error {
 				m.Rootless = user.ServiceRootless
 				m.BinResolv = user.ServiceBindresolv
+				m.Prehook = c.StringSlice("service_prehook")
+				m.Posthook = c.StringSlice("service_posthook")
 				return nil
 			})
 			if err != nil {

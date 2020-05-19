@@ -8,6 +8,7 @@ import (
 var TaskWait = &cli.Command{
 	Name:      "wait",
 	Usage:     "wait all tasks of containers done",
+	Aliases:   []string{"w"},
 	ArgsUsage: "$cntrid",
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)

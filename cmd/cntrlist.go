@@ -7,28 +7,31 @@ import (
 	"text/tabwriter"
 
 	"github.com/urfave/cli/v2"
-	mtyp "github.com/xhebox/chrootd/meta"
+	ctyp "github.com/xhebox/chrootd/cntr"
 )
 
 var CntrQuery = &cli.Command{
-	Name:      "query",
+	Name:      "list",
 	Usage:     "query all containers",
-	ArgsUsage: "[ [$nodeid] a tidwall/gjson valid json query string ]",
-	Aliases:   []string{"list"},
+	ArgsUsage: "[tidwall/gjson query string | container tag]",
+	Aliases:   []string{"ls", "l"},
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)
 
-		args := strings.Join(c.Args().Slice(), ",")
-		if args == "" {
-			args = "[]"
+		args := "[]"
+		if c.Args().Len() == 1 {
+			args = c.Args().First()
+		} else if c.Args().Len() > 1 {
+			args = strings.Join(c.Args().Slice(), ",")
 		}
 
 		writer := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
 
-		fmt.Fprintf(writer, "Name\tCntrId\tMetaID\tImage\n")
+		fmt.Fprintf(writer, "Name\tTags\tRootfs\tCntrId\tMetaID\tImage\n")
 
-		err := user.Cntr.List(args, func(cntr string, meta *mtyp.Metainfo) error {
-			fmt.Fprintf(writer, "%s\t%s\t%s\t%s:%s\n", meta.Name, cntr, meta.Id, meta.Image, meta.ImageReference)
+		err := user.Cntr.List(args, func(info *ctyp.Cntrinfo) error {
+			meta := info.Meta
+			fmt.Fprintf(writer, "%s\t%v\t%s\t%s\t%s\t%s:%s\n", meta.Name, info.Tags, info.Rootfs, info.Id, meta.Id, meta.Image, meta.ImageReference)
 			return nil
 		})
 		if err != nil {

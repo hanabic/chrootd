@@ -8,6 +8,7 @@ import (
 var CntrDelete = &cli.Command{
 	Name:      "delete",
 	Usage:     "delete a container by id",
+	Aliases:   []string{"del", "d"},
 	ArgsUsage: "$cntrid",
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)

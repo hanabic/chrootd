@@ -7,7 +7,6 @@ import (
 
 	"github.com/xhebox/chrootd/client"
 	ctyp "github.com/xhebox/chrootd/cntr"
-	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
 )
 
@@ -16,11 +15,12 @@ type cntr struct {
 	*CntrProxy
 }
 
-func (m *cntr) Meta() (*mtyp.Metainfo, error) {
-	res := mtyp.Metainfo{}
-	return &res, m.Call(m.cid, func(cli client.Client, svc map[string]string) error {
-		return cli.Call(m.Context, m.svc, "CntrMeta", m.cid, &res)
+func (m *cntr) Meta() (*ctyp.Cntrinfo, error) {
+	res := &ctyp.Cntrinfo{}
+	err := m.Call(m.cid, func(cli client.Client, svc map[string]string) error {
+		return cli.Call(m.Context, m.svc, "CntrMeta", m.cid, res)
 	})
+	return res,err
 }
 
 func (m *cntr) Start(task *ctyp.Taskinfo) (string, error) {

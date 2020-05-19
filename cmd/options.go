@@ -147,6 +147,10 @@ func MetaFromCli(c *cli.Context) (*mtyp.Metainfo, error) {
 		res.Name = c.String("name")
 	}
 
+	if res.Name == "" {
+		res.Name = "unnamed"
+	}
+
 	capFromCli(&res.Capabilities, c)
 
 	resFromCli(&res.Resources, c)

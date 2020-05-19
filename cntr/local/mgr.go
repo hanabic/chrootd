@@ -1,13 +1,13 @@
 package local
 
 import (
-	"sort"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 
 	"github.com/imdario/mergo"
@@ -62,6 +62,8 @@ type CntrManager struct {
 
 	Rootless  bool
 	BinResolv bool
+	Prehook   []string
+	Posthook  []string
 }
 
 func NewCntrManager(path, image string, s store.Store, opts ...func(*CntrManager) error) (*CntrManager, error) {
@@ -155,13 +157,15 @@ func (m *CntrManager) ID() (string, error) {
 	return m.id, nil
 }
 
-func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error) {
-	if sort.SearchStrings(meta.RootfsIds, rootfs) == len(meta.RootfsIds) {
+func (m *CntrManager) Create(info *Cntrinfo) (string, error) {
+	if !utils.PathExist(filepath.Join(m.rootfsPath, info.Rootfs)) {
 		return "", errors.New("wrong rootfs id")
 	}
 
+	meta := info.Meta
+
 	cfg := &configs.Config{
-		Rootfs: filepath.Join(m.rootfsPath, rootfs),
+		Rootfs: filepath.Join(m.rootfsPath, info.Rootfs),
 		Cgroups: &configs.Cgroup{
 			Name:      "container",
 			Resources: &meta.Resources,
@@ -225,25 +229,34 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 		Hostname:        meta.Hostname,
 		RootlessCgroups: m.Rootless,
 		RootlessEUID:    m.Rootless,
-		Hooks: &configs.Hooks{
-			Prestart: []configs.Hook{},
-		},
+		Hooks:           &configs.Hooks{},
+	}
+
+	for _, v := range m.Prehook {
+		cfg.Hooks.Prestart = append(cfg.Hooks.Prestart, configs.NewCommandHook(configs.Command{
+			Path: v,
+		}))
+	}
+	for _, v := range m.Posthook {
+		cfg.Hooks.Poststop = append(cfg.Hooks.Poststop, configs.NewCommandHook(configs.Command{
+			Path: v,
+		}))
 	}
 
 	if !m.Rootless {
 		cfg.Namespaces = append(cfg.Namespaces, configs.Namespace{Type: configs.NEWNET})
 		cfg.Mounts = append(cfg.Mounts, &configs.Mount{
-				Source:      "sysfs",
-				Destination: "/sys",
-				Device:      "sysfs",
-				Flags:       unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV | unix.MS_RDONLY,
-			})
+			Source:      "sysfs",
+			Destination: "/sys",
+			Device:      "sysfs",
+			Flags:       unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV | unix.MS_RDONLY,
+		})
 	} else {
 		cfg.Mounts = append(cfg.Mounts, &configs.Mount{
-				Source:      "/sys",
-				Destination: "/sys",
-				Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
-			})
+			Source:      "/sys",
+			Destination: "/sys",
+			Flags:       unix.MS_BIND | unix.MS_REC | unix.MS_RDONLY,
+		})
 	}
 
 	for _, v := range meta.MaskPaths {
@@ -281,7 +294,7 @@ func (m *CntrManager) Create(meta *mtyp.Metainfo, rootfs string) (string, error)
 	}
 
 	m.rwmux.Lock()
-	m.cntrs[id] = newCntr(c, meta)
+	m.cntrs[id] = newCntr(c, meta, id, info.Rootfs, info.Tags)
 	m.rwmux.Unlock()
 
 	return id, nil
@@ -312,14 +325,26 @@ func (m *CntrManager) Delete(id string) error {
 	return nil
 }
 
-func (m *CntrManager) List(id string, f func(k string, meta *mtyp.Metainfo) error) error {
+func (m *CntrManager) List(id string, f func(*Cntrinfo) error) error {
 	m.rwmux.RLock()
 	defer m.rwmux.RUnlock()
 
-	for k, cntr := range m.cntrs {
+	for _, cntr := range m.cntrs {
+		meta, err := cntr.Meta()
+		if err != nil {
+			return err
+		}
+
+		if id != "" && sort.SearchStrings(cntr.tags, id) != len(cntr.tags) {
+			if err := f(meta); err != nil {
+				return err
+			}
+			continue
+		}
+
 		mb, _ := json.Marshal(cntr.meta)
 		if gjson.ValidBytes(mb) && gjson.GetBytes(mb, id).Type != gjson.Null {
-			if err := f(k, cntr.meta); err != nil {
+			if err := f(meta); err != nil {
 				return err
 			}
 		}

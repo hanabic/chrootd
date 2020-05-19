@@ -17,13 +17,20 @@ type Taskinfo struct {
 	TermWidth    uint16               `json:"term_width"`
 }
 
+type Cntrinfo struct {
+	Id     string
+	Rootfs string
+	Tags   []string
+	Meta   *mtyp.Metainfo
+}
+
 type Attacher interface {
 	io.ReadWriteCloser
 	CloseWrite() error
 }
 
 type Cntr interface {
-	Meta() (*mtyp.Metainfo, error)
+	Meta() (*Cntrinfo, error)
 	Start(*Taskinfo) (string, error)
 	Stop(string, bool) error
 	StopAll(bool) error
@@ -35,10 +42,10 @@ type Cntr interface {
 type Manager interface {
 	ID() (string, error)
 
-	Create(*mtyp.Metainfo, string) (string, error)
+	Create(*Cntrinfo) (string, error)
 	Get(string) (Cntr, error)
 	Delete(string) error
-	List(string, func(string, *mtyp.Metainfo) error) error
+	List(string, func(*Cntrinfo) error) error
 
 	Close() error
 }

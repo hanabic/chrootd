@@ -5,7 +5,6 @@ import (
 
 	"github.com/xhebox/chrootd/client"
 	ctyp "github.com/xhebox/chrootd/cntr"
-	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
 )
 
@@ -43,13 +42,10 @@ func (m *CntrProxy) ID() (string, error) {
 	return "", nil
 }
 
-func (m *CntrProxy) Create(meta *mtyp.Metainfo, rid string) (string, error) {
+func (m *CntrProxy) Create(meta *ctyp.Cntrinfo) (string, error) {
 	res := ""
 	return res, m.Call(meta.Id, func(cli client.Client, svc map[string]string) error {
-		return cli.Call(m.Context, m.svc, "Create", &CreateReq{
-			Meta:   meta,
-			Rootfs: rid,
-		}, &res)
+		return cli.Call(m.Context, m.svc, "Create", meta, &res)
 	})
 }
 
@@ -59,37 +55,17 @@ func (m *CntrProxy) Delete(cid string) error {
 	})
 }
 
-func (m *CntrProxy) List(node string, f func(string, *mtyp.Metainfo) error) error {
-	nid, query, _ := utils.DecomposeID(node)
-	if nid != "" {
-		return m.Call(nid, func(cli client.Client, svc map[string]string) error {
-			res := []CntrListRes{}
-
-			err := cli.Call(m.Context, m.svc, "List", query, &res)
-			if err != nil {
-				return err
-			}
-
-			for _, v := range res {
-				if err := f(v.Id, v.Meta); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
-	}
-
+func (m *CntrProxy) List(tag string, f func(*ctyp.Cntrinfo) error) error {
 	return m.Broadcast(func(cli client.Client) error {
-		res := []CntrListRes{}
+		res := []ctyp.Cntrinfo{}
 
-		err := cli.Call(m.Context, m.svc, "List", node, &res)
+		err := cli.Call(m.Context, m.svc, "List", tag, &res)
 		if err != nil {
 			return err
 		}
 
-		for _, v := range res {
-			if err := f(v.Id, v.Meta); err != nil {
+		for k := range res {
+			if err := f(&res[k]); err != nil {
 				return err
 			}
 		}

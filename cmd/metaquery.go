@@ -10,10 +10,10 @@ import (
 )
 
 var MetaQuery = &cli.Command{
-	Name:      "query",
+	Name:      "list",
 	Usage:     "query metadatas",
 	ArgsUsage: "[a tidwall/gjson valid json query string]",
-	Aliases:   []string{"list"},
+	Aliases:   []string{"ls", "l"},
 	Action: func(c *cli.Context) error {
 		user := c.Context.Value("_data").(*User)
 

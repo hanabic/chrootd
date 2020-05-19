@@ -6,8 +6,9 @@ import (
 )
 
 var MetaUpdate = &cli.Command{
-	Name:  "update",
-	Usage: "update a container metadata",
+	Name:    "update",
+	Usage:   "update a container metadata",
+	Aliases: []string{"u"},
 	Flags: utils.ConcatMultipleFlags([]cli.Flag{},
 		metaFlags,
 		resourceFlags,
