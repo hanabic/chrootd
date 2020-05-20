@@ -78,6 +78,11 @@ var Exec = &cli.Command{
 			return err
 		}
 
+		err = cntr.Wait()
+		if err != nil {
+			return err
+		}
+
 		err = cntr.StopAll(true)
 		if err != nil {
 			return err
