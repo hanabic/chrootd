@@ -24,6 +24,7 @@ var ImgRemove = &cli.Command{
 			if err != nil {
 				return err
 			}
+			return nil
 		}
 
 		meta, err := user.Meta.Get(sli[0])
