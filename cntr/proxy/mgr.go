@@ -44,7 +44,7 @@ func (m *CntrProxy) ID() (string, error) {
 
 func (m *CntrProxy) Create(meta *ctyp.Cntrinfo) (string, error) {
 	res := ""
-	return res, m.Call(meta.Id, func(cli client.Client, svc map[string]string) error {
+	return res, m.Call(meta.Meta.Id, func(cli client.Client, svc map[string]string) error {
 		return cli.Call(m.Context, m.svc, "Create", meta, &res)
 	})
 }
