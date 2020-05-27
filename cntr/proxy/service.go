@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -44,7 +45,7 @@ func NewCntrService(mgr ctyp.Manager, cli *api.Client, svcname string, rpcAddr, 
 		}
 
 		svc.reg = &api.AgentServiceRegistration{
-			ID:      ksuid.New().String(),
+			ID:      fmt.Sprintf("%s.cntr", id),
 			Name:    svcname,
 			Address: svc.addr.Addr(),
 			Port:    svc.addr.Port(),
@@ -55,7 +56,7 @@ func NewCntrService(mgr ctyp.Manager, cli *api.Client, svcname string, rpcAddr, 
 			Tags: []string{id},
 		}
 
-		err = cli.Agent().ServiceRegister(svc.reg)
+		err = cli.Agent().ServiceRegisterOpts(svc.reg, api.ServiceRegisterOpts{ReplaceExistingChecks: true})
 		if err != nil {
 			return nil, err
 		}

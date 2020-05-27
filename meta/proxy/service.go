@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/consul/api"
-	"github.com/segmentio/ksuid"
 	"github.com/pkg/errors"
 	mtyp "github.com/xhebox/chrootd/meta"
 	"github.com/xhebox/chrootd/utils"
@@ -35,14 +35,14 @@ func NewMetaService(mgr mtyp.Manager, cli *api.Client, svcname string, rpcAddr *
 		svc.id = id
 
 		svc.reg = &api.AgentServiceRegistration{
-			ID:      ksuid.New().String(),
+			ID:      fmt.Sprintf("%s.meta", id),
 			Name:    svcname,
 			Address: svc.addr.Addr(),
 			Port:    svc.addr.Port(),
 			Tags:    []string{svc.id},
 		}
 
-		err = cli.Agent().ServiceRegister(svc.reg)
+		err = cli.Agent().ServiceRegisterOpts(svc.reg, api.ServiceRegisterOpts{ReplaceExistingChecks: true})
 		if err != nil {
 			return nil, err
 		}
