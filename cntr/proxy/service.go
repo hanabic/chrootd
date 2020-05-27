@@ -53,14 +53,6 @@ func NewCntrService(mgr ctyp.Manager, cli *api.Client, svcname string, rpcAddr, 
 				"attach":        attachAddr.String(),
 			},
 			Tags: []string{id},
-			Checks: api.AgentServiceChecks{
-				&api.AgentServiceCheck{
-					DeregisterCriticalServiceAfter: "1h",
-					Interval:                       "1m",
-					Timeout:                        "30s",
-					TCP:                            svc.addr.String(),
-				},
-			},
 		}
 
 		err = cli.Agent().ServiceRegister(svc.reg)

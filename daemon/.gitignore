@@ -3,4 +3,4 @@ rootfs
 main
 *.toml
 container/
-start
+*.sh
