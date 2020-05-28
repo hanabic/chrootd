@@ -2,3 +2,5 @@ cli
 cmd
 cmds
 main
+*.toml
+*.json
